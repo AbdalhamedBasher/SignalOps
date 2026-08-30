@@ -4,17 +4,35 @@ A learning-first telecom incident-management MVP built with React, TypeScript, a
 
 ## Current vertical slice
 
-The first slice proves the complete data flow:
+Raw alarms arrive, get grouped into incidents by deterministic rules, and reach
+the dashboard as one actionable story:
 
 ```text
-FastAPI in-memory incident data
+Alarm posted to /api/alarms
+        ↓ catalog lookup (severity, title, probable cause)
+Correlation rules: same site, still open, inside the window?
+        ↓ join an incident, or open a new one
+In-memory incident store
         ↓ JSON over HTTP
-React API client
+React API client (validates every field it relies on)
         ↓ typed state
-Dashboard metrics + incident cards
+Dashboard metrics, incident cards, alarm timeline
 ```
 
 The backend validates every outgoing incident with Pydantic. The frontend treats network data as untrusted and validates its shape before putting it into React state.
+
+## Watch correlation happen
+
+With both servers running, replay a fault:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\simulate.py --site RUH-315 --retry-last
+```
+
+Four alarms are posted seconds apart. They collapse into a single critical
+incident, and the redelivered final alarm is recognised rather than counted
+twice. Reload the dashboard to see it.
 
 ## Project structure
 
@@ -39,7 +57,12 @@ The API runs at `http://localhost:8000`. Useful endpoints:
 
 - `GET /health`
 - `GET /api/incidents`
+- `POST /api/alarms` — ingest one alarm; returns the incident it was correlated
+  into, with `201` when recorded and `200` when recognised as a redelivery
 - Interactive documentation: `http://localhost:8000/docs`
+
+Alarm timestamps must carry a UTC offset. A timestamp without one is rejected
+with `422`, because ordering events correctly is the whole point of the system.
 
 ## Run the frontend
 

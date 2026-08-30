@@ -46,13 +46,39 @@ Notes on the alarm slice:
 - Timestamps are validated as parseable, not merely as strings, so consumers
   can sort and format them without guarding against `Invalid Date`.
 
-### Slice 3 — Create and correlate alarms
+### Slice 3 — Create and correlate alarms ✅
 
-- Alarm ingestion endpoint
-- Deterministic correlation rules
-- Network-event simulator
-- Incident timeline
-- Integration tests for correlation behavior
+- [x] Alarm ingestion endpoint (`POST /api/alarms`)
+- [x] Deterministic correlation rules
+- [x] Network-event simulator (`backend/scripts/simulate.py`)
+- [x] Incident timeline
+- [x] Integration tests for correlation behavior
+
+The correlation rule, stated once so it does not have to be reverse-engineered
+from code:
+
+> An alarm joins an open incident at the same site whose most recent alarm it
+> lands within `CORRELATION_WINDOW` of. Otherwise it opens a new incident.
+
+Decisions worth knowing:
+
+- **The window slides** along the incident's latest alarm rather than being
+  fixed at its opening time, so a fault lasting longer than one window stays a
+  single incident instead of splitting in two.
+- **Severity is derived, never sent.** An alarm code maps to a severity through
+  `catalog.py`; an incident is as severe as its worst alarm. A later, milder
+  alarm cannot talk an incident down.
+- **The earliest alarm names the incident.** Because delivery is out of order,
+  this is recomputed on every attach: an alarm that turns out to predate the
+  rest changes both the incident's start time and its explanation.
+- **Ingestion is idempotent** on the sender's `external_id`. Retries are normal
+  in telemetry; a redelivery returns 200 with `duplicate: true` and records
+  nothing, while a newly recorded alarm returns 201.
+- **Uncatalogued alarm codes are kept, not dropped**, and classified medium —
+  an unrecognised signal is still evidence.
+- **Unknown sites report zero affected subscribers**, which means "impact
+  unknown" rather than "nobody affected". Worth revisiting: the dashboard
+  currently cannot tell those two apart.
 
 ### Slice 4 — Persistence
 

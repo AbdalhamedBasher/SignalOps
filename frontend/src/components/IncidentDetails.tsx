@@ -100,10 +100,18 @@ export function IncidentDetails({ incident, onClose }: IncidentDetailsProps) {
         <ol className="alarm-timeline__list">
           {alarmsOldestFirst.map((alarm, index) => (
             <li className="alarm-timeline__item" key={alarm.id}>
-              <span className="alarm-timeline__marker" aria-hidden="true" />
+              <span
+                className={`alarm-timeline__marker alarm-timeline__marker--${alarm.severity}`}
+                aria-hidden="true"
+              />
               <div className="alarm-timeline__body">
                 <div className="alarm-timeline__topline">
                   <code className="alarm-timeline__code">{alarm.code}</code>
+                  {/* The marker dot encodes severity as colour, which a screen
+                      reader cannot convey. This carries the same fact as text. */}
+                  <span className="visually-hidden">
+                    {alarm.severity} severity
+                  </span>
                   {index === 0 && (
                     <span className="alarm-timeline__badge">first signal</span>
                   )}

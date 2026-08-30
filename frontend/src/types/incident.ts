@@ -14,10 +14,17 @@ export const incidentStatuses = [
 export type IncidentSeverity = (typeof incidentSeverities)[number];
 export type IncidentStatus = (typeof incidentStatuses)[number];
 
+/**
+ * Only the fields the dashboard actually consumes. The API sends more (a
+ * per-alarm `site_id`, the collector's `external_id`); we deliberately do not
+ * declare or validate those, because the incident already carries the site and
+ * nothing here should start depending on delivery metadata.
+ */
 export type Alarm = {
   id: string;
   code: string;
   message: string;
+  severity: IncidentSeverity;
   occurred_at: string;
 };
 
@@ -69,6 +76,7 @@ export function isAlarm(value: unknown): value is Alarm {
     typeof value.id === "string" &&
     typeof value.code === "string" &&
     typeof value.message === "string" &&
+    isIncidentSeverity(value.severity) &&
     isTimestamp(value.occurred_at)
   );
 }

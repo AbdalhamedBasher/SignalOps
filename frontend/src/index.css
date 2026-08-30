@@ -526,9 +526,34 @@ h3 {
   box-shadow: 0 0 0 4px rgba(150, 174, 204, 0.07);
 }
 
-.alarm-timeline__item:first-child .alarm-timeline__marker {
+/* Severity of the individual alarm, matching the incident severity palette. */
+.alarm-timeline__marker--critical {
+  background: #ff4f60;
+  box-shadow: 0 0 0 4px rgba(255, 79, 96, 0.16);
+}
+
+.alarm-timeline__marker--high {
+  background: #ffa143;
+  box-shadow: 0 0 0 4px rgba(255, 161, 67, 0.16);
+}
+
+.alarm-timeline__marker--medium {
+  background: #eec446;
+  box-shadow: 0 0 0 4px rgba(238, 196, 70, 0.14);
+}
+
+.alarm-timeline__marker--low {
   background: var(--accent);
   box-shadow: 0 0 0 4px rgba(84, 224, 180, 0.12);
+}
+
+.visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
 }
 
 .alarm-timeline__body {
