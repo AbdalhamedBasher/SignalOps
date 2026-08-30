@@ -110,12 +110,19 @@ def test_a_disconnected_dashboard_stops_being_a_subscriber() -> None:
             assert json.loads(websocket.receive_text())["type"] == "incident.opened"
 
 
-def test_publishing_before_the_loop_is_bound_is_a_clear_error() -> None:
-    """
-    An unbound broadcaster cannot reach the event loop. Failing loudly beats
-    silently dropping every event the dashboards were waiting for.
-    """
+def test_publishing_to_nobody_is_harmless() -> None:
+    """An unbound broadcaster with no subscribers has no work to do."""
     unbound = IncidentBroadcaster()
 
-    # No subscribers means no work, so this stays quiet rather than raising.
     assert unbound.subscriber_count == 0
+
+
+# TODO(you): the case above is the easy half. `publish()` raises a RuntimeError
+# when it has subscribers but no bound loop, and nothing tests that — so the
+# guard could be deleted and the suite would stay green.
+# Write `test_publishing_with_subscribers_but_no_loop_is_a_clear_error`:
+# construct an IncidentBroadcaster, put an `asyncio.Queue()` straight into its
+# `_subscribers` set (reaching into a private attribute is acceptable here
+# because you are deliberately building a state the public API prevents), then
+# assert `pytest.raises(RuntimeError)` when you publish an IncidentEvent.
+# Hint: build the event with any incident, e.g. from `app.data.SEED_INCIDENTS`.
