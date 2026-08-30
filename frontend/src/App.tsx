@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { fetchIncidents } from "./api/incidents";
+import { ConnectionIndicator } from "./components/ConnectionIndicator";
 import { IncidentCard } from "./components/IncidentCard";
 import { IncidentDetails } from "./components/IncidentDetails";
 import {
@@ -8,47 +8,17 @@ import {
   type SeverityFilter,
   type StatusFilter,
 } from "./components/IncidentFilters";
-import type { Incident } from "./types/incident";
-
-type RequestStatus = "loading" | "success" | "error";
+import { LiveEventFeed } from "./components/LiveEventFeed";
+import { useIncidentBoard } from "./hooks/useIncidentBoard";
 
 export default function App() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [requestStatus, setRequestStatus] = useState<RequestStatus>("loading");
-  const [errorMessage, setErrorMessage] = useState("");
+  const { incidents, requestStatus, errorMessage, connection, feed } =
+    useIncidentBoard();
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
     null,
   );
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function loadIncidents() {
-      try {
-        setRequestStatus("loading");
-        setErrorMessage("");
-
-        const receivedIncidents = await fetchIncidents(controller.signal);
-        setIncidents(receivedIncidents);
-        setRequestStatus("success");
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-
-        setErrorMessage(
-          error instanceof Error ? error.message : "Unable to load incidents",
-        );
-        setRequestStatus("error");
-      }
-    }
-
-    void loadIncidents();
-
-    return () => controller.abort();
-  }, []);
 
   const openIncidents = useMemo(
     () => incidents.filter((incident) => incident.status !== "resolved"),
@@ -68,12 +38,13 @@ export default function App() {
     [incidents, severityFilter, statusFilter],
   );
 
+  // Derived from every incident, not the filtered subset: changing a filter
+  // should not silently close the detail pane the engineer is reading. This
+  // also keeps the pane showing live updates for an incident that a filter
+  // would currently exclude.
   const selectedIncident = useMemo(
-    () =>
-      filteredIncidents.find(
-        (incident) => incident.id === selectedIncidentId,
-      ) ?? null,
-    [filteredIncidents, selectedIncidentId],
+    () => incidents.find((incident) => incident.id === selectedIncidentId) ?? null,
+    [incidents, selectedIncidentId],
   );
 
   const criticalIncidents = openIncidents.filter(
@@ -101,9 +72,7 @@ export default function App() {
             engineers toward faster incident resolution.
           </p>
         </div>
-        <div className="live-indicator" aria-label="Network feed online">
-          <span /> Network feed online
-        </div>
+        <ConnectionIndicator connection={connection} />
       </header>
 
       <main>
@@ -121,6 +90,8 @@ export default function App() {
             <strong>{affectedSubscribers.toLocaleString()}</strong>
           </article>
         </section>
+
+        <LiveEventFeed entries={feed} />
 
         <section className="incidents-section">
           <div className="section-heading">

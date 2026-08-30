@@ -123,6 +123,135 @@ h3 {
   box-shadow: 0 0 0 5px rgba(84, 224, 180, 0.1);
 }
 
+.live-indicator--connecting span {
+  background: #eec446;
+  box-shadow: 0 0 0 5px rgba(238, 196, 70, 0.12);
+}
+
+.live-indicator--offline {
+  border-color: rgba(255, 109, 122, 0.32);
+  color: #ffc6cc;
+}
+
+.live-indicator--offline span {
+  background: var(--danger);
+  box-shadow: 0 0 0 5px rgba(255, 109, 122, 0.12);
+}
+
+.live-indicator--live span {
+  animation: feed-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes feed-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 5px rgba(84, 224, 180, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(84, 224, 180, 0.02);
+  }
+}
+
+/* A pulsing dot is decoration, not information. Anyone who has asked for less
+   motion still gets the colour and the label. */
+@media (prefers-reduced-motion: reduce) {
+  .live-indicator--live span {
+    animation: none;
+  }
+}
+
+.event-feed {
+  margin-bottom: 36px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(16px);
+}
+
+.event-feed__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.event-feed__count {
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #dbe8f7;
+  background: rgba(150, 174, 204, 0.12);
+  font-weight: 700;
+}
+
+.event-feed__idle {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.event-feed__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-feed__item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.event-feed__tag {
+  flex: 0 0 auto;
+  min-width: 62px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.event-feed__tag--opened {
+  color: #ffd9dd;
+  background: rgba(255, 79, 96, 0.18);
+}
+
+.event-feed__tag--updated {
+  color: #c9f7ea;
+  background: rgba(84, 224, 180, 0.14);
+}
+
+.event-feed__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #c7d6e8;
+}
+
+.event-feed__time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .event-feed__item {
+    flex-wrap: wrap;
+  }
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

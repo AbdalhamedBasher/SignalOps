@@ -1,17 +1,17 @@
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class IncidentSeverity(str, Enum):
+class IncidentSeverity(StrEnum):
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
 
 
-class IncidentStatus(str, Enum):
+class IncidentStatus(StrEnum):
     ACTIVE = "active"
     INVESTIGATING = "investigating"
     RESOLVED = "resolved"
@@ -95,3 +95,21 @@ class AlarmIngestResult(BaseModel):
     incident_created: bool
     # True when this alarm was recognised as an already-ingested delivery.
     duplicate: bool
+
+
+class IncidentEventType(StrEnum):
+    OPENED = "incident.opened"
+    UPDATED = "incident.updated"
+
+
+class IncidentEvent(BaseModel):
+    """
+    What a connected dashboard receives when something changes.
+
+    The whole incident travels rather than a patch. The payloads are small, and
+    a self-contained object cannot leave a client half-updated if a message is
+    dropped — the next one it receives is still complete and correct.
+    """
+
+    type: IncidentEventType
+    incident: Incident

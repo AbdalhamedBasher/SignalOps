@@ -81,6 +81,30 @@ export function isAlarm(value: unknown): value is Alarm {
   );
 }
 
+export const incidentEventTypes = [
+  "incident.opened",
+  "incident.updated",
+] as const;
+
+export type IncidentEventType = (typeof incidentEventTypes)[number];
+
+export type IncidentEvent = {
+  type: IncidentEventType;
+  incident: Incident;
+};
+
+export function isIncidentEvent(value: unknown): value is IncidentEvent {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.type === "string" &&
+    incidentEventTypes.includes(value.type as IncidentEventType) &&
+    isIncident(value.incident)
+  );
+}
+
 export function isIncident(value: unknown): value is Incident {
   if (!isRecord(value)) {
     return false;

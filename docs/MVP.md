@@ -121,12 +121,41 @@ Decisions worth knowing:
   `sa.DateTime()` so a migration written today still runs after that class is
   renamed or deleted.
 
-### Slice 5 — Real-time operations
+### Slice 5 — Real-time operations ✅
 
-- WebSocket incident updates
-- Reconnect behavior
-- Live event feed
-- Optimistic engineer actions where appropriate
+- [x] WebSocket incident updates (`GET /ws/incidents`)
+- [x] Reconnect behavior
+- [x] Live event feed
+- [ ] Optimistic engineer actions — **deliberately not built**
+
+There is nothing to be optimistic about yet. Optimistic updates exist to hide
+latency on an action a user takes, and the dashboard is still read-only: an
+engineer cannot acknowledge, assign, or resolve anything. This belongs with the
+first engineer action, not before it.
+
+Decisions worth knowing:
+
+- **Publish after commit, never before.** Announcing an incident that a later
+  failure rolls back would leave every connected screen showing something that
+  does not exist, with no correcting message to follow.
+- **Whole incidents travel, not patches.** Payloads are small, and a
+  self-contained object cannot leave a client half-updated if a message is
+  dropped — the next one it receives is still complete.
+- **Every connection re-reads the board over HTTP.** A socket only carries what
+  happened while it was open, so the snapshot is what closes the gap after a
+  disconnection. The socket is for freshness; HTTP is for truth.
+- **Socket messages are validated exactly like HTTP responses.** They cross the
+  same trust boundary and reuse the same guards.
+- **Duplicate alarms are not announced**, because nothing changed. Broadcasting
+  them would flash an update on every screen for an event that did not happen.
+- **Slow clients lose messages rather than memory.** Each connection holds a
+  bounded buffer; a dashboard nobody is watching cannot grow the server's heap.
+- **The connection indicator reports the real socket state.** It previously
+  claimed "online" unconditionally, including with the API switched off.
+
+Known limit: the broadcaster is in-process, so events reach only dashboards
+connected to the worker that handled the alarm. Running more than one worker
+needs a shared bus (Redis pub/sub or similar) before this holds.
 
 ### Slice 6 — Runbook-assisted recommendations
 

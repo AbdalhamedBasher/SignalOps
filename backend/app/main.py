@@ -1,13 +1,21 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Response, status
+from fastapi import Depends, FastAPI, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from app.database import SessionFactory, engine, get_session
-from app.models import AlarmIngestResult, AlarmSubmission, Incident
+from app.events import broadcaster
+from app.models import (
+    AlarmIngestResult,
+    AlarmSubmission,
+    Incident,
+    IncidentEvent,
+    IncidentEventType,
+)
 from app.repository import IncidentRepository
 from app.seed import seed_if_empty
 
@@ -23,12 +31,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     with SessionFactory() as session:
         seed_if_empty(session)
 
+    # Request handlers run in a thread pool; this is the loop they have to hand
+    # outbound events back to.
+    broadcaster.bind(asyncio.get_running_loop())
+
     yield
 
 
 app = FastAPI(
     title="SignalOps API",
-    version="0.3.0",
+    version="0.4.0",
     description="Telecom incident-management API for the SignalOps AI MVP.",
     lifespan=lifespan,
 )
@@ -62,6 +74,7 @@ def get_incidents(
 def ingest_alarm(
     submission: AlarmSubmission,
     response: Response,
+    session: Session = Depends(get_session),
     repository: IncidentRepository = Depends(get_repository),
 ) -> AlarmIngestResult:
     """
@@ -74,8 +87,47 @@ def ingest_alarm(
     """
     result = repository.ingest(submission)
 
+    if not result.duplicate:
+        # Commit before announcing. Telling dashboards about an incident that a
+        # later failure rolls back would leave every connected screen showing
+        # something that does not exist, and nothing would arrive to correct
+        # it. FastAPI resolves `session` and `repository` to the same session,
+        # so this is the transaction the repository just wrote into.
+        session.commit()
+
+        broadcaster.publish(
+            IncidentEvent(
+                type=(
+                    IncidentEventType.OPENED
+                    if result.incident_created
+                    else IncidentEventType.UPDATED
+                ),
+                incident=result.incident,
+            )
+        )
+
     response.status_code = (
         status.HTTP_200_OK if result.duplicate else status.HTTP_201_CREATED
     )
 
     return result
+
+
+@app.websocket("/ws/incidents")
+async def incident_feed(websocket: WebSocket) -> None:
+    """
+    Push incident changes to a dashboard for as long as it stays connected.
+
+    Deliberately send-only. A socket carries what happened while the client was
+    listening and nothing more, so a client that reconnects re-fetches the full
+    board over HTTP rather than expecting this to replay anything it missed.
+    """
+    await websocket.accept()
+
+    with broadcaster.subscribe() as queue:
+        try:
+            while True:
+                payload = await queue.get()
+                await websocket.send_text(payload)
+        except WebSocketDisconnect:
+            return

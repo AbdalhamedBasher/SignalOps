@@ -40,9 +40,16 @@ def engine() -> Iterator[Engine]:
 
 
 @pytest.fixture(autouse=True)
-def seeded_app(engine: Engine) -> Iterator[None]:
+def seeded_app(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Point the application at the test database and give it the seed board."""
     factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    # The lifespan checks the schema and seeds using these directly rather than
+    # through the dependency, so overriding get_session alone would leave it
+    # reading the developer's own database — and failing outright on a clone
+    # where nobody has run the migrations yet.
+    monkeypatch.setattr("app.main.engine", engine)
+    monkeypatch.setattr("app.main.SessionFactory", factory)
 
     with factory() as session:
         seed_if_empty(session)

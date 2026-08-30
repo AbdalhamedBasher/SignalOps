@@ -32,7 +32,12 @@ cd backend
 
 Four alarms are posted seconds apart. They collapse into a single critical
 incident, and the redelivered final alarm is recognised rather than counted
-twice. Reload the dashboard to see it.
+twice.
+
+Leave the dashboard open while it runs: the incident appears, climbs in
+severity, and lands in the live activity feed without a reload. Kill the API
+and the header indicator turns red and starts retrying; bring it back and the
+dashboard reconnects and re-reads the board on its own.
 
 ## Project structure
 
@@ -73,6 +78,8 @@ The API runs at `http://localhost:8000`. Useful endpoints:
 - `GET /api/incidents`
 - `POST /api/alarms` — ingest one alarm; returns the incident it was correlated
   into, with `201` when recorded and `200` when recognised as a redelivery
+- `GET /ws/incidents` — WebSocket that pushes each incident as it opens or
+  changes. Send-only; clients re-read `/api/incidents` whenever they connect
 - Interactive documentation: `http://localhost:8000/docs`
 
 Alarm timestamps must carry a UTC offset. A timestamp without one is rejected
