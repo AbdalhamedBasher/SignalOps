@@ -50,7 +50,21 @@ cd backend
 C:\Python314\python.exe -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
+alembic upgrade head
 uvicorn app.main:app --reload
+```
+
+`alembic upgrade head` creates the schema and is required before the first
+start; the API refuses to boot without it rather than failing later with a
+confusing SQL error. The seed incidents are inserted automatically the first
+time the database is found empty.
+
+Data lives in `backend/signalops.db` (SQLite) by default. To use PostgreSQL
+instead, set `DATABASE_URL` and run the same migrations:
+
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg://user:password@localhost:5432/signalops"
+alembic upgrade head
 ```
 
 The API runs at `http://localhost:8000`. Useful endpoints:

@@ -80,13 +80,46 @@ Decisions worth knowing:
   unknown" rather than "nobody affected". Worth revisiting: the dashboard
   currently cannot tell those two apart.
 
-### Slice 4 — Persistence
+### Slice 4 — Persistence ✅
 
-- PostgreSQL
-- SQLAlchemy models and repositories
-- Alembic migrations
-- Transaction boundaries
-- Seed data
+- [x] SQLAlchemy models and repositories
+- [x] Alembic migrations
+- [x] Transaction boundaries
+- [x] Seed data
+- [x] Engine chosen by `DATABASE_URL`
+- [ ] Actually run against PostgreSQL
+
+**On the database choice.** The schema, queries, and migrations are portable and
+the engine is a single setting. Development runs on SQLite because it needs
+nothing installed; moving to PostgreSQL is:
+
+```text
+DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/signalops
+alembic upgrade head
+```
+
+That last box stays unticked until someone has genuinely run the suite against
+Postgres. Portable-by-construction is not the same as verified.
+
+Decisions worth knowing:
+
+- **Two model layers, on purpose.** `models.py` is the API contract and what
+  the rules operate on; `tables.py` is how rows sit on disk. Merging them makes
+  every storage decision an API change.
+- **One transaction per request.** `get_session` commits on success and rolls
+  back on any exception, so a handler cannot leave half its writes behind.
+- **Uniqueness is enforced by the database.** The in-memory version deduplicated
+  with a Python dict under a lock. That protected one process; a unique index on
+  `alarms.external_id` protects all of them.
+- **`UtcDateTime` keeps timestamps aware.** SQLite has no timezone-aware type
+  and would return naive values, which the models reject by design — so the
+  application would fail to read back rows it had just written.
+- **Alarm order is now promised**, and promised to be *arrival* order rather
+  than chronological. Once a database is involved, "no promised order" means
+  "whatever the query planner returns", which is not a contract.
+- **Migrations never import application code.** `UtcDateTime` renders as
+  `sa.DateTime()` so a migration written today still runs after that class is
+  renamed or deleted.
 
 ### Slice 5 — Real-time operations
 

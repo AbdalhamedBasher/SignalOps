@@ -39,33 +39,34 @@ SEED_INCIDENTS: tuple[Incident, ...] = (
         affected_subscribers=1240,
         probable_cause="Fiber backhaul interruption",
         opened_at=datetime(2026, 7, 21, 8, 14, 3, tzinfo=UTC),
-        # Stored out of chronological order on purpose: alarms reach a real
-        # collector in arrival order, not event order. Ordering is a
-        # presentation concern, so the frontend sorts them.
+        # Listed in the order a collector received them, which is what the
+        # ascending alarm ids record. The timestamps are deliberately not in
+        # that order: real telemetry arrives late and out of sequence, and the
+        # dashboard is what puts the story back in causal order.
         alarms=[
             seed_alarm(
-                "ALM-5003",
+                "ALM-5001",
                 "RUH-104",
                 "S1_LINK_FAILURE",
                 "S1 control-plane link to the core network was lost",
                 datetime(2026, 7, 21, 8, 15, 12, tzinfo=UTC),
             ),
             seed_alarm(
-                "ALM-5001",
+                "ALM-5002",
                 "RUH-104",
                 "BACKHAUL_DOWN",
                 "Fiber backhaul link is unavailable",
                 datetime(2026, 7, 21, 8, 14, 3, tzinfo=UTC),
             ),
             seed_alarm(
-                "ALM-5004",
+                "ALM-5003",
                 "RUH-104",
                 "VOLTE_REG_FAILURE",
                 "VoLTE registrations are failing for attached subscribers",
                 datetime(2026, 7, 21, 8, 16, 41, tzinfo=UTC),
             ),
             seed_alarm(
-                "ALM-5002",
+                "ALM-5004",
                 "RUH-104",
                 "CELL_OUT_OF_SERVICE",
                 "Cell RUH-104-C2 stopped carrying subscriber traffic",

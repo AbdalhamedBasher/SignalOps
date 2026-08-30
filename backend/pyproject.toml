@@ -10,6 +10,9 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1.0",
   "uvicorn[standard]>=0.30,<1.0",
+  "sqlalchemy>=2.0,<3.0",
+  "alembic>=1.14,<2.0",
+  "pydantic-settings>=2.6,<3.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +31,19 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+# Alembic writes these from its own template; they are a historical record and
+# are not ours to restyle.
+extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# env.py has to extend sys.path before it can import the app package, so its
+# imports cannot be sorted or hoisted to the top.
+"alembic/env.py" = ["E402", "I001"]
+
+[tool.ruff.lint.flake8-bugbear]
+# `Depends(...)` in a parameter default is how FastAPI declares dependencies.
+# B008 exists to catch accidental shared mutable defaults, which this is not.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path"]

@@ -5,6 +5,14 @@ from app.main import app
 client = TestClient(app)
 
 
+def get_incident(incident_id: str) -> dict:
+    """Look incidents up by id: board order is a presentation choice, not a
+    contract tests should depend on."""
+    incidents = client.get("/api/incidents").json()
+
+    return next(incident for incident in incidents if incident["id"] == incident_id)
+
+
 def test_health_check() -> None:
     response = client.get("/health")
 
@@ -19,17 +27,27 @@ def test_incidents_are_returned_with_the_expected_contract() -> None:
 
     incidents = response.json()
     assert len(incidents) == 3
-    assert incidents[0]["id"] == "INC-1001"
-    assert incidents[0]["severity"] == "critical"
-    assert incidents[0]["affected_subscribers"] == 1240
 
-    alarm_codes = {alarm["code"] for alarm in incidents[0]["alarms"]}
+    backhaul = next(
+        incident for incident in incidents if incident["id"] == "INC-1001"
+    )
+    assert backhaul["severity"] == "critical"
+    assert backhaul["affected_subscribers"] == 1240
+
+    alarm_codes = {alarm["code"] for alarm in backhaul["alarms"]}
     assert alarm_codes == {
         "BACKHAUL_DOWN",
         "CELL_OUT_OF_SERVICE",
         "S1_LINK_FAILURE",
         "VOLTE_REG_FAILURE",
     }
+
+
+def test_the_board_shows_the_most_recent_incident_first() -> None:
+    incidents = client.get("/api/incidents").json()
+    opened_timestamps = [incident["opened_at"] for incident in incidents]
+
+    assert opened_timestamps == sorted(opened_timestamps, reverse=True)
 
 
 def test_alarm_identifiers_are_unique_across_incidents() -> None:
@@ -43,17 +61,20 @@ def test_alarm_identifiers_are_unique_across_incidents() -> None:
     assert len(alarm_ids) == len(set(alarm_ids))
 
 
-def test_the_api_does_not_promise_a_chronological_alarm_order() -> None:
+def test_alarms_come_back_in_arrival_order_not_event_order() -> None:
     """
-    Alarms are stored in arrival order, not event order. This test pins that
-    fact down so nobody assumes ordering is guaranteed by the API: the
-    frontend is the layer responsible for sorting them for display.
-    """
-    response = client.get("/api/incidents")
+    The API promises arrival order, which is not chronological order.
 
-    backhaul_alarms = response.json()[0]["alarms"]
+    Both halves matter. Promising *an* order stops the answer depending on the
+    query planner, and promising this particular one keeps the frontend
+    responsible for putting the cascade back into causal sequence.
+    """
+    backhaul_alarms = get_incident("INC-1001")["alarms"]
+
+    alarm_ids = [alarm["id"] for alarm in backhaul_alarms]
+    assert alarm_ids == sorted(alarm_ids)
+
     occurred_timestamps = [alarm["occurred_at"] for alarm in backhaul_alarms]
-
     assert occurred_timestamps != sorted(occurred_timestamps)
 
 
