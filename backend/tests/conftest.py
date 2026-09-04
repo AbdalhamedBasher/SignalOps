@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app import tables  # noqa: F401  (imported so Base knows the tables)
 from app.database import Base, get_session
 from app.main import app
+from app.runbook_repository import RunbookRepository
 from app.seed import seed_if_empty
 
 
@@ -39,10 +40,36 @@ def engine() -> Iterator[Engine]:
     test_engine.dispose()
 
 
+@pytest.fixture
+def session_factory(engine: Engine) -> sessionmaker[Session]:
+    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+@pytest.fixture
+def session(
+    session_factory: sessionmaker[Session], seeded_app: None
+) -> Iterator[Session]:
+    """
+    A session on the seeded test database.
+
+    Depends on `seeded_app` so the board and the runbooks are already loaded;
+    tests that talk to a repository directly want the same starting state the
+    HTTP tests get.
+    """
+    del seeded_app
+
+    with session_factory() as open_session:
+        yield open_session
+
+
 @pytest.fixture(autouse=True)
-def seeded_app(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def seeded_app(
+    engine: Engine,
+    session_factory: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[None]:
     """Point the application at the test database and give it the seed board."""
-    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    factory = session_factory
 
     # The lifespan checks the schema and seeds using these directly rather than
     # through the dependency, so overriding get_session alone would leave it
@@ -53,6 +80,8 @@ def seeded_app(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> Iterator[None
 
     with factory() as session:
         seed_if_empty(session)
+        RunbookRepository(session).load_from_disk()
+        session.commit()
 
     def override_get_session() -> Iterator[Session]:
         session = factory()

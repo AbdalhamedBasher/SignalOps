@@ -97,6 +97,67 @@ class AlarmIngestResult(BaseModel):
     duplicate: bool
 
 
+class RunbookSection(BaseModel):
+    id: str
+    runbook_id: str
+    runbook_title: str
+    source_name: str
+    heading: str
+    anchor: str
+    body: str
+    applies_to: list[str]
+
+    @property
+    def citation(self) -> str:
+        return f"{self.runbook_title} § {self.heading}"
+
+
+class RecommendationStatus(StrEnum):
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class Recommendation(BaseModel):
+    id: str
+    incident_id: str
+    # Every recommendation points at the runbook section it came from. There is
+    # no path in this system for advice to reach an engineer uncited.
+    section: RunbookSection
+    # Why this section was retrieved, in the engineer's terms.
+    rationale: str
+    matched_codes: list[str]
+    status: RecommendationStatus
+    created_at: datetime
+    decided_at: datetime | None = None
+    decided_by: str | None = None
+    decision_note: str | None = None
+    # Set when an engineer approved the guidance but altered the steps.
+    modified_steps: str | None = None
+
+    _normalize_created_at = field_validator("created_at")(require_timezone)
+
+
+class RecommendationDecision(BaseModel):
+    """An engineer accepting or rejecting a proposed runbook section."""
+
+    decided_by: str = Field(min_length=1, max_length=120)
+    note: str | None = Field(default=None, max_length=2000)
+    modified_steps: str | None = Field(default=None, max_length=8000)
+
+
+class AuditEvent(BaseModel):
+    id: str
+    incident_id: str
+    recommendation_id: str | None
+    action: str
+    actor: str
+    detail: str
+    occurred_at: datetime
+
+    _normalize_occurred_at = field_validator("occurred_at")(require_timezone)
+
+
 class IncidentEventType(StrEnum):
     OPENED = "incident.opened"
     UPDATED = "incident.updated"

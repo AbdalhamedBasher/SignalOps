@@ -65,6 +65,11 @@ class IncidentRepository:
 
         return [to_incident(row) for row in rows]
 
+    def find_incident(self, incident_id: str) -> Incident | None:
+        row = self._session.get(IncidentRow, incident_id)
+
+        return None if row is None else to_incident(row)
+
     def ingest(self, submission: AlarmSubmission) -> AlarmIngestResult:
         already_seen = self._find_by_external_id(submission.external_id)
         if already_seen is not None:

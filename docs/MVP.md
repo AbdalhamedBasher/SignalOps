@@ -157,6 +157,29 @@ Known limit: the broadcaster is in-process, so events reach only dashboards
 connected to the worker that handled the alarm. Running more than one worker
 needs a shared bus (Redis pub/sub or similar) before this holds.
 
+### Evaluated and parked: Nokia Network as Code / CAMARA device-location APIs
+
+Considered 2026-08-31. Not adopted for the MVP.
+
+`POST /retrieve` (CAMARA Location Retrieval, offered by Nokia Network as Code)
+returns where **one** device is, given an identifier the caller already holds,
+as a circle with a centre and an accuracy radius.
+
+- It cannot improve `affected_subscribers`. That is the tempting use, and the
+  API forbids it by design: it is strictly per-device, requires a three-legged
+  token carrying that subscriber's consent, and has no "which devices are near
+  this site" operation — that is precisely the capability the consent model
+  exists to prevent. Real subscriber-impact figures come from operator-internal
+  cell attach counts, not from a public network API.
+- Where it would genuinely fit is confirming that a **dispatched engineer** has
+  reached a site, because an employee can meaningfully consent. For that,
+  Location *Verification* ("is this device inside this circle?") is the better
+  choice than Retrieval, since it answers the question without handing back
+  coordinates.
+- Blocked on Slice 7 regardless: it needs OAuth2/OIDC client infrastructure
+  that does not exist yet. Nokia's SIMULATOR plan would allow building it
+  without real subscribers once that is in place.
+
 ### Slice 6 — Runbook-assisted recommendations
 
 - Upload and parse approved runbooks

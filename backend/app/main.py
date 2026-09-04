@@ -2,7 +2,15 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
@@ -12,11 +20,15 @@ from app.events import broadcaster
 from app.models import (
     AlarmIngestResult,
     AlarmSubmission,
+    AuditEvent,
     Incident,
     IncidentEvent,
     IncidentEventType,
+    Recommendation,
+    RecommendationDecision,
 )
 from app.repository import IncidentRepository
+from app.runbook_repository import RunbookRepository
 from app.seed import seed_if_empty
 
 
@@ -30,6 +42,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     with SessionFactory() as session:
         seed_if_empty(session)
+
+        # Approved runbooks are version-controlled alongside the code, so they
+        # are imported at start rather than uploaded. Already-imported files
+        # are skipped, making this safe on every restart.
+        RunbookRepository(session).load_from_disk()
+        session.commit()
 
     # Request handlers run in a thread pool; this is the loop they have to hand
     # outbound events back to.
@@ -56,6 +74,21 @@ app.add_middleware(
 
 def get_repository(session: Session = Depends(get_session)) -> IncidentRepository:
     return IncidentRepository(session)
+
+
+def get_runbooks(session: Session = Depends(get_session)) -> RunbookRepository:
+    return RunbookRepository(session)
+
+
+def require_incident(
+    incident_id: str, repository: IncidentRepository
+) -> Incident:
+    incident = repository.find_incident(incident_id)
+
+    if incident is None:
+        raise HTTPException(status_code=404, detail=f"Unknown incident {incident_id}")
+
+    return incident
 
 
 @app.get("/health")
@@ -111,6 +144,100 @@ def ingest_alarm(
     )
 
     return result
+
+
+@app.get(
+    "/api/incidents/{incident_id}/recommendations",
+    response_model=list[Recommendation],
+)
+def get_recommendations(
+    incident_id: str,
+    repository: IncidentRepository = Depends(get_repository),
+    runbooks: RunbookRepository = Depends(get_runbooks),
+) -> list[Recommendation]:
+    require_incident(incident_id, repository)
+
+    return runbooks.recommendations_for(incident_id)
+
+
+@app.post(
+    "/api/incidents/{incident_id}/recommendations",
+    response_model=list[Recommendation],
+)
+def propose_recommendations(
+    incident_id: str,
+    repository: IncidentRepository = Depends(get_repository),
+    runbooks: RunbookRepository = Depends(get_runbooks),
+) -> list[Recommendation]:
+    """
+    Retrieve the runbook sections that apply to this incident.
+
+    Safe to call repeatedly: sections already proposed keep whatever an
+    engineer decided about them, and only newly relevant ones are added.
+    """
+    incident = require_incident(incident_id, repository)
+
+    return runbooks.propose_for(incident)
+
+
+@app.post(
+    "/api/recommendations/{recommendation_id}/approve",
+    response_model=Recommendation,
+)
+def approve_recommendation(
+    recommendation_id: str,
+    decision: RecommendationDecision,
+    runbooks: RunbookRepository = Depends(get_runbooks),
+) -> Recommendation:
+    """
+    Record an engineer accepting a procedure, optionally with changes.
+
+    Approval is the only thing this endpoint does. SignalOps does not execute
+    the steps, by design: nothing here should be able to touch the network
+    without a human doing it.
+    """
+    recommendation = runbooks.decide(
+        recommendation_id, approved=True, decision=decision
+    )
+
+    if recommendation is None:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown recommendation {recommendation_id}"
+        )
+
+    return recommendation
+
+
+@app.post(
+    "/api/recommendations/{recommendation_id}/reject",
+    response_model=Recommendation,
+)
+def reject_recommendation(
+    recommendation_id: str,
+    decision: RecommendationDecision,
+    runbooks: RunbookRepository = Depends(get_runbooks),
+) -> Recommendation:
+    recommendation = runbooks.decide(
+        recommendation_id, approved=False, decision=decision
+    )
+
+    if recommendation is None:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown recommendation {recommendation_id}"
+        )
+
+    return recommendation
+
+
+@app.get("/api/incidents/{incident_id}/audit", response_model=list[AuditEvent])
+def get_audit_trail(
+    incident_id: str,
+    repository: IncidentRepository = Depends(get_repository),
+    runbooks: RunbookRepository = Depends(get_runbooks),
+) -> list[AuditEvent]:
+    require_incident(incident_id, repository)
+
+    return runbooks.audit_for(incident_id)
 
 
 @app.websocket("/ws/incidents")
