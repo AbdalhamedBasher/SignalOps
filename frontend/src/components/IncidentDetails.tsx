@@ -1,4 +1,5 @@
 import type { Incident } from "../types/incident";
+import { RecommendationPanel } from "./RecommendationPanel";
 
 type IncidentDetailsProps = {
   incident: Incident;
@@ -129,6 +130,8 @@ export function IncidentDetails({ incident, onClose }: IncidentDetailsProps) {
           ))}
         </ol>
       </section>
+
+      <RecommendationPanel incidentId={incident.id} />
     </aside>
   );
 }

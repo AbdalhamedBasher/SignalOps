@@ -63,6 +63,34 @@ def test_a_section_without_alarm_codes_is_kept_as_general_guidance() -> None:
     assert "fifteen minutes" in general.body
 
 
+def test_hard_wrapped_steps_are_folded_back_into_one_line() -> None:
+    """
+    The file is wrapped at eighty columns; the rendered panel is not.
+
+    Without this the dashboard shows steps broken mid-sentence, which reads as
+    a formatting bug to the engineer trying to follow them.
+    """
+    wrapped = """\
+# Wrapped
+
+## A step that runs long
+Applies to: BACKHAUL_DOWN
+
+1. A reset destroys the diagnostic state that explains the fault. Capture logs
+   and counters first.
+2. A second step.
+"""
+
+    section = parse_runbook(wrapped).sections[0]
+
+    assert "Capture logs and counters first." in section.body
+    assert section.body.splitlines() == [
+        "1. A reset destroys the diagnostic state that explains the fault. "
+        "Capture logs and counters first.",
+        "2. A second step.",
+    ]
+
+
 def test_slugify_produces_a_usable_anchor() -> None:
     assert slugify("Never reset equipment blind") == "never-reset-equipment-blind"
     assert slugify("Fail over to the protection path!") == (

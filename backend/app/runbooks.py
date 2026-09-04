@@ -35,6 +35,34 @@ class ParsedRunbook:
     sections: list[ParsedSection]
 
 
+def reflow(body: str) -> str:
+    """
+    Undo the hard wrapping a Markdown file is written with.
+
+    Runbooks are wrapped at around eighty columns so they read well as files
+    and diff cleanly. Rendered into a narrow panel those breaks land in the
+    middle of sentences, so a continuation line — one that is indented under
+    the line above — is folded back into it. Blank lines and the start of each
+    numbered or bulleted step are left alone, because they carry structure.
+    """
+    lines: list[str] = []
+
+    for raw_line in body.splitlines():
+        stripped = raw_line.strip()
+
+        is_continuation = (
+            raw_line.startswith((" ", "\t")) and bool(stripped) and bool(lines) and bool(lines[-1])
+        )
+
+        if is_continuation:
+            lines[-1] = f"{lines[-1]} {stripped}"
+            continue
+
+        lines.append(stripped)
+
+    return "\n".join(lines).strip()
+
+
 def slugify(heading: str) -> str:
     """`Confirm the transport fault` -> `confirm-the-transport-fault`."""
     lowered = re.sub(r"[^a-z0-9]+", "-", heading.lower())
@@ -58,7 +86,7 @@ def parse_runbook(markdown: str, *, fallback_title: str = "Untitled runbook") ->
             ParsedSection(
                 heading=current_heading,
                 anchor=slugify(current_heading),
-                body="\n".join(current_lines).strip(),
+                body=reflow("\n".join(current_lines)),
                 position=len(sections),
                 applies_to=list(current_codes),
             )

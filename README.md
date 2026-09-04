@@ -80,7 +80,16 @@ The API runs at `http://localhost:8000`. Useful endpoints:
   into, with `201` when recorded and `200` when recognised as a redelivery
 - `GET /ws/incidents` — WebSocket that pushes each incident as it opens or
   changes. Send-only; clients re-read `/api/incidents` whenever they connect
+- `POST /api/incidents/{id}/recommendations` — match the incident's alarms
+  against the approved runbooks; `GET` the same path to read what was matched
+- `POST /api/recommendations/{id}/approve` and `/reject` — record an engineer's
+  decision, optionally with modified steps
+- `GET /api/incidents/{id}/audit` — the append-only record of who decided what
 - Interactive documentation: `http://localhost:8000/docs`
+
+Runbooks live in `backend/runbooks/` as Markdown and are imported at startup.
+A `## Heading` starts a section and an `Applies to: CODE_A, CODE_B` line under
+it says which alarms it covers. Add a file, restart, and it is searchable.
 
 Alarm timestamps must carry a UTC offset. A timestamp without one is rejected
 with `422`, because ordering events correctly is the whole point of the system.

@@ -180,13 +180,56 @@ as a circle with a centre and an accuracy radius.
   that does not exist yet. Nokia's SIMULATOR plan would allow building it
   without real subscribers once that is in place.
 
-### Slice 6 — Runbook-assisted recommendations
+### Slice 6a — Runbook retrieval and the approval gate ✅
 
-- Upload and parse approved runbooks
-- Retrieve relevant sections
-- Generate cited recommendations
-- Human approval, rejection, and modification
-- Audit trail
+- [x] Parse approved runbooks (Markdown in `backend/runbooks/`)
+- [x] Retrieve relevant sections
+- [x] Cited recommendations
+- [x] Human approval, rejection, and modification
+- [x] Audit trail
+- [ ] Upload endpoint — runbooks are version-controlled and loaded at startup
+      instead, which is how approved procedures actually reach production
+
+Decisions worth knowing:
+
+- **Retrieval is deterministic, and that is the point.** An engineer at three
+  in the morning has to be able to check *why* a procedure was put in front of
+  them. "Your incident raised BACKHAUL_DOWN and this section says it covers
+  BACKHAUL_DOWN" is checkable in a second.
+- **Ranked by coverage.** A section matching more of the incident's distinct
+  alarm codes outranks one matching a single symptom, because a procedure
+  written for the combination in front of you is more use.
+- **Nothing reaches an engineer uncited.** Every recommendation carries the
+  runbook title, the heading, and the source file. The frontend guard rejects a
+  payload whose citation is malformed rather than rendering it without a
+  source.
+- **Silence beats guessing.** An incident whose alarms match no runbook gets no
+  recommendations. A procedure that does not apply costs time during an outage.
+- **Regeneration is additive.** A unique constraint on (incident, section)
+  means new alarms can pull in newly relevant guidance without resetting a
+  decision an engineer already made.
+- **Section codes live in their own indexed table**, so matching cannot confuse
+  `POWER_UNSTABLE` with `SITE_POWER_UNSTABLE`.
+- **Markdown is reflowed on parse.** Runbooks are hard-wrapped at eighty
+  columns to diff well; rendered into a narrow panel those breaks land
+  mid-sentence, so continuation lines are folded back.
+
+Known limit, and it is a real one: **the audit trail is unauthenticated.** The
+engineer's name is whatever the caller typed. Nothing verifies it, so this
+records intent, not identity — it is not yet evidence. It becomes an audit
+trail when Slice 7 puts authentication behind it.
+
+### Slice 6b — Generated recommendations (not started)
+
+The LLM belongs here, on top of the retrieval above: ranking, and summarising
+retrieved sections into advice tailored to the specific incident. Built in this
+order on purpose — the citation, approval, and audit scaffolding is what makes
+a generated recommendation safe to show. A generator without them is an
+unreviewable oracle.
+
+Whatever is generated must still cite the sections it drew on, and must still
+pass through the same approval gate. The MVP rule stands: no autonomous action
+on the network.
 
 ### Slice 7 — Authentication and presentation
 
