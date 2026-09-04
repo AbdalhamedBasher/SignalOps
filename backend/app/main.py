@@ -15,8 +15,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import SessionFactory, engine, get_session
 from app.events import broadcaster
+from app.generation import (
+    BriefingUnavailable,
+    UngroundedBriefing,
+    build_generator,
+)
 from app.models import (
     AlarmIngestResult,
     AlarmSubmission,
@@ -26,6 +32,7 @@ from app.models import (
     IncidentEventType,
     Recommendation,
     RecommendationDecision,
+    StoredBriefing,
 )
 from app.repository import IncidentRepository
 from app.runbook_repository import RunbookRepository
@@ -61,6 +68,13 @@ app = FastAPI(
     version="0.4.0",
     description="Telecom incident-management API for the SignalOps AI MVP.",
     lifespan=lifespan,
+)
+
+# Built once at import: constructing the Anthropic client per request would
+# open a new connection pool every time. Tests replace this attribute.
+briefing_generator = build_generator(
+    enabled=get_settings().enable_briefings,
+    model=get_settings().briefing_model,
 )
 
 app.add_middleware(
@@ -227,6 +241,44 @@ def reject_recommendation(
         )
 
     return recommendation
+
+
+@app.get("/api/incidents/{incident_id}/briefing", response_model=StoredBriefing | None)
+def get_briefing(
+    incident_id: str,
+    repository: IncidentRepository = Depends(get_repository),
+    runbooks: RunbookRepository = Depends(get_runbooks),
+) -> StoredBriefing | None:
+    require_incident(incident_id, repository)
+
+    return runbooks.latest_briefing(incident_id)
+
+
+@app.post("/api/incidents/{incident_id}/briefing", response_model=StoredBriefing)
+def generate_briefing(
+    incident_id: str,
+    repository: IncidentRepository = Depends(get_repository),
+    runbooks: RunbookRepository = Depends(get_runbooks),
+) -> StoredBriefing:
+    """
+    Summarise the already-retrieved runbook sections for this incident.
+
+    The model never decides which procedures are relevant — retrieval does that
+    deterministically first, and the model only writes the orientation over
+    what it is handed. A briefing citing anything it was not given is refused.
+    """
+    incident = require_incident(incident_id, repository)
+    recommendations = runbooks.recommendations_for(incident_id)
+
+    try:
+        briefing = briefing_generator.generate(incident, recommendations)
+    except UngroundedBriefing as error:
+        # 502: the upstream model produced something we will not pass on.
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except BriefingUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    return runbooks.store_briefing(incident_id, briefing)
 
 
 @app.get("/api/incidents/{incident_id}/audit", response_model=list[AuditEvent])

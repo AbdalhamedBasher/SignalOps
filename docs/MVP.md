@@ -219,17 +219,48 @@ engineer's name is whatever the caller typed. Nothing verifies it, so this
 records intent, not identity — it is not yet evidence. It becomes an audit
 trail when Slice 7 puts authentication behind it.
 
-### Slice 6b — Generated recommendations (not started)
+### Slice 6b — Generated incident briefings 🚧
 
-The LLM belongs here, on top of the retrieval above: ranking, and summarising
-retrieved sections into advice tailored to the specific incident. Built in this
-order on purpose — the citation, approval, and audit scaffolding is what makes
-a generated recommendation safe to show. A generator without them is an
-unreviewable oracle.
+- [x] Generate a short orientation over the retrieved sections
+- [x] Ground it: every cited section is verified against what was retrieved
+- [x] Store what was shown, with the model that wrote it
+- [x] Degrade cleanly when disabled or unreachable
+- [ ] **Verified against the live Claude API** — see below
+- [ ] Evals for briefing quality
 
-Whatever is generated must still cite the sections it drew on, and must still
-pass through the same approval gate. The MVP rule stands: no autonomous action
-on the network.
+Uses `claude-opus-5` through the official `anthropic` Python SDK, with
+structured outputs so the response shape is guaranteed rather than parsed out of
+prose. **Off by default** (`ENABLE_BRIEFINGS=true` to switch on) because it
+calls a paid API and the rest of the product works without it.
+
+Decisions worth knowing:
+
+- **The model never decides what is relevant.** Deterministic retrieval picks
+  the sections; the model only writes the orientation over what it is handed.
+  That keeps the failure mode "unhelpful summary" rather than "confidently
+  wrong procedure".
+- **Citations are verified, not requested.** The prompt asks the model to cite
+  only the sections it was given; `verify_citations` then checks every returned
+  id against that set. A prompt is a request; the check is the guarantee.
+- **A fabricated citation fails closed.** The briefing is refused entirely
+  rather than shown with the offending citation stripped — if one citation is
+  invented, the prose around it cannot be trusted either.
+- **Provenance is always on screen.** The panel names the model that wrote the
+  text, says it is not a substitute for reading the cited procedures, and
+  renders it visually distinct from approved runbook text.
+- **A generation failure never takes down the dashboard.** Construction
+  failures degrade to the disabled generator; API failures return 503.
+- **Briefings create no approvals.** The recommendations underneath keep their
+  own gate. Nothing generated becomes action.
+
+**Not yet verified against the real API.** Every test replaces the model with a
+stub, and this machine has no Claude credentials, so the live request path —
+`messages.parse`, structured output, real latency and failure modes — was
+written against the SDK documentation and never executed. That box is genuinely
+unticked: the guardrails around the call are tested, the call itself is not.
+
+Quality is also unmeasured. Whether the briefings are any *good* is an eval
+question, and there is no eval set yet.
 
 ### Slice 7 — Authentication and presentation
 

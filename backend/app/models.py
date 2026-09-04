@@ -158,6 +158,29 @@ class AuditEvent(BaseModel):
     _normalize_occurred_at = field_validator("occurred_at")(require_timezone)
 
 
+class GeneratedBriefing(BaseModel):
+    """
+    A model-written orientation over already-retrieved runbook sections.
+
+    `cited_section_ids` has been checked against the sections the model was
+    given before this object exists; an unverified citation never reaches here.
+    """
+
+    summary: str
+    first_actions: list[str]
+    cited_section_ids: list[str]
+    gaps: str | None = None
+    model: str
+
+
+class StoredBriefing(GeneratedBriefing):
+    id: str
+    incident_id: str
+    generated_at: datetime
+
+    _normalize_generated_at = field_validator("generated_at")(require_timezone)
+
+
 class IncidentEventType(StrEnum):
     OPENED = "incident.opened"
     UPDATED = "incident.updated"

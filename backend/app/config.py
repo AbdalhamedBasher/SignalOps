@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     #   DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/signalops
     database_url: str = "sqlite:///./signalops.db"
 
+    # Off by default: generated briefings call a paid API and the rest of the
+    # product works without them. Enabling is an explicit decision, not
+    # something that switches itself on because a key happens to be present.
+    enable_briefings: bool = False
+    briefing_model: str = "claude-opus-5"
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

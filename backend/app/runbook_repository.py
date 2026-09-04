@@ -8,18 +8,22 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.generation import deserialise_actions, serialise_actions
 from app.models import (
     AuditEvent,
+    GeneratedBriefing,
     Incident,
     Recommendation,
     RecommendationDecision,
     RecommendationStatus,
     RunbookSection,
+    StoredBriefing,
 )
 from app.retrieval import retrieve_for_incident
 from app.runbooks import ParsedRunbook, load_runbook_directory
 from app.tables import (
     AuditEventRow,
+    BriefingRow,
     RecommendationRow,
     RunbookRow,
     RunbookSectionCodeRow,
@@ -55,6 +59,21 @@ def to_recommendation(row: RecommendationRow) -> Recommendation:
         decided_by=row.decided_by,
         decision_note=row.decision_note,
         modified_steps=row.modified_steps,
+    )
+
+
+def to_briefing(row: BriefingRow) -> StoredBriefing:
+    return StoredBriefing(
+        id=row.id,
+        incident_id=row.incident_id,
+        summary=row.summary,
+        first_actions=deserialise_actions(row.first_actions),
+        cited_section_ids=[
+            section_id for section_id in row.cited_section_ids.split(",") if section_id
+        ],
+        gaps=row.gaps,
+        model=row.model,
+        generated_at=row.generated_at,
     )
 
 
@@ -252,6 +271,50 @@ class RunbookRepository:
         self._session.flush()
 
         return to_recommendation(row)
+
+    # ---------------------------------------------------------------- briefings
+
+    def latest_briefing(self, incident_id: str) -> StoredBriefing | None:
+        row = self._session.scalars(
+            select(BriefingRow)
+            .where(BriefingRow.incident_id == incident_id)
+            .order_by(BriefingRow.number.desc())
+            .limit(1)
+        ).first()
+
+        return None if row is None else to_briefing(row)
+
+    def store_briefing(
+        self, incident_id: str, briefing: GeneratedBriefing
+    ) -> StoredBriefing:
+        number = self._next_number(BriefingRow)
+        row = BriefingRow(
+            id=f"BRF-{number:04d}",
+            number=number,
+            incident_id=incident_id,
+            summary=briefing.summary,
+            first_actions=serialise_actions(briefing.first_actions),
+            cited_section_ids=",".join(briefing.cited_section_ids),
+            gaps=briefing.gaps,
+            model=briefing.model,
+            generated_at=datetime.now(UTC),
+        )
+
+        self._session.add(row)
+        self._session.flush()
+
+        self.record(
+            incident_id=incident_id,
+            recommendation_id=None,
+            action="briefing.generated",
+            actor=briefing.model,
+            detail=(
+                f"Generated a briefing citing "
+                f"{', '.join(briefing.cited_section_ids) or 'no sections'}"
+            ),
+        )
+
+        return to_briefing(row)
 
     # ------------------------------------------------------------------- audit
 

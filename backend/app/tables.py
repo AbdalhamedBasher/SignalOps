@@ -158,6 +158,30 @@ class RecommendationRow(Base):
     )
 
 
+class BriefingRow(Base):
+    """
+    A generated briefing, kept because it was shown to an engineer.
+
+    The model id and the cited sections are stored alongside the prose so that
+    a decision made after reading it can be reconstructed later — including
+    which version of which model wrote it.
+    """
+
+    __tablename__ = "briefings"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    number: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    incident_id: Mapped[str] = mapped_column(
+        ForeignKey("incidents.id", ondelete="CASCADE"), index=True
+    )
+    summary: Mapped[str] = mapped_column(Text)
+    first_actions: Mapped[str] = mapped_column(Text)
+    cited_section_ids: Mapped[str] = mapped_column(String(400))
+    gaps: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model: Mapped[str] = mapped_column(String(64))
+    generated_at: Mapped[datetime] = mapped_column(UtcDateTime, index=True)
+
+
 class AuditEventRow(Base):
     """
     An append-only record of who decided what.

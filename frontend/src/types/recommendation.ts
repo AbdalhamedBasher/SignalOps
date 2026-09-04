@@ -28,6 +28,36 @@ export type Recommendation = {
   modified_steps: string | null;
 };
 
+export type Briefing = {
+  id: string;
+  incident_id: string;
+  summary: string;
+  first_actions: string[];
+  cited_section_ids: string[];
+  gaps: string | null;
+  model: string;
+  generated_at: string;
+};
+
+export function isBriefing(value: unknown): value is Briefing {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.incident_id === "string" &&
+    typeof value.summary === "string" &&
+    isStringArray(value.first_actions) &&
+    // Citations are what make generated text checkable, so a briefing whose
+    // citation list is the wrong shape is refused rather than displayed.
+    isStringArray(value.cited_section_ids) &&
+    isNullableString(value.gaps) &&
+    typeof value.model === "string" &&
+    typeof value.generated_at === "string"
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }

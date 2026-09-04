@@ -6,6 +6,7 @@ import {
   requestRecommendations,
 } from "../api/recommendations";
 import type { Recommendation } from "../types/recommendation";
+import { BriefingPanel } from "./BriefingPanel";
 
 type RecommendationPanelProps = {
   incidentId: string;
@@ -96,6 +97,7 @@ export function RecommendationPanel({ incidentId }: RecommendationPanelProps) {
   const canDecide = engineer.trim().length > 0;
 
   return (
+    <>
     <section className="runbook" aria-labelledby="runbook-title">
       <div className="runbook__heading">
         <span id="runbook-title">Runbook guidance</span>
@@ -201,5 +203,11 @@ export function RecommendationPanel({ incidentId }: RecommendationPanelProps) {
         </>
       )}
     </section>
+
+    <BriefingPanel
+      incidentId={incidentId}
+      hasRecommendations={recommendations.length > 0}
+    />
+    </>
   );
 }

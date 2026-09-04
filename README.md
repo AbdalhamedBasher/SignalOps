@@ -87,6 +87,24 @@ The API runs at `http://localhost:8000`. Useful endpoints:
 - `GET /api/incidents/{id}/audit` — the append-only record of who decided what
 - Interactive documentation: `http://localhost:8000/docs`
 
+- `POST /api/incidents/{id}/briefing` — write a short orientation over the
+  already-retrieved sections; `GET` returns the most recent one, or `null`
+
+### Generated briefings (optional)
+
+Off by default. To switch on, install the extra and provide Claude credentials:
+
+```powershell
+python -m pip install -e ".[dev,ai]"
+$env:ENABLE_BRIEFINGS = "true"
+$env:ANTHROPIC_API_KEY = "sk-ant-..."   # or run `ant auth login`
+```
+
+The model is only ever given the runbook sections retrieval already matched,
+and every section it cites is checked against that list — a briefing citing
+anything else is refused rather than shown. With the feature off, the endpoint
+returns `503` with an explanation and nothing else changes.
+
 Runbooks live in `backend/runbooks/` as Markdown and are imported at startup.
 A `## Heading` starts a section and an `Applies to: CODE_A, CODE_B` line under
 it says which alarms it covers. Add a file, restart, and it is searchable.
