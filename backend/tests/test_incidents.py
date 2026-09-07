@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.conftest import COLLECTOR
 
 client = TestClient(app)
 
@@ -87,6 +88,7 @@ def test_an_alarm_at_a_quiet_site_opens_a_new_incident() -> None:
             "message": "Fiber backhaul link is unavailable",
             "occurred_at": "2026-08-30T10:00:00Z",
         },
+        headers=COLLECTOR,
     )
 
     assert response.status_code == 201
@@ -111,6 +113,7 @@ def test_a_following_alarm_joins_the_incident_instead_of_creating_one() -> None:
             "message": "Fiber backhaul link is unavailable",
             "occurred_at": "2026-08-30T10:00:00Z",
         },
+        headers=COLLECTOR,
     )
 
     second = client.post(
@@ -121,6 +124,7 @@ def test_a_following_alarm_joins_the_incident_instead_of_creating_one() -> None:
             "message": "VoLTE registrations are failing",
             "occurred_at": "2026-08-30T10:03:00Z",
         },
+        headers=COLLECTOR,
     )
 
     assert second.status_code == 201
@@ -143,8 +147,8 @@ def test_a_redelivered_alarm_is_recognised_and_not_counted_twice() -> None:
         "external_id": "collector-abc-123",
     }
 
-    first = client.post("/api/alarms", json=payload)
-    retry = client.post("/api/alarms", json=payload)
+    first = client.post("/api/alarms", json=payload, headers=COLLECTOR)
+    retry = client.post("/api/alarms", json=payload, headers=COLLECTOR)
 
     assert first.status_code == 201
     assert first.json()["duplicate"] is False
@@ -167,6 +171,7 @@ def test_an_alarm_without_a_timezone_is_rejected() -> None:
             "message": "Fiber backhaul link is unavailable",
             "occurred_at": "2026-08-30T10:00:00",
         },
+        headers=COLLECTOR,
     )
 
     assert response.status_code == 422
@@ -182,6 +187,7 @@ def test_an_ingested_alarm_is_visible_on_the_incident_board() -> None:
             "message": "Cabinet temperature above threshold",
             "occurred_at": "2026-08-30T11:30:00Z",
         },
+        headers=COLLECTOR,
     )
 
     incidents = client.get("/api/incidents").json()

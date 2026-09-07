@@ -2,10 +2,13 @@
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.events import IncidentBroadcaster
 from app.main import app
+from tests.conftest import COLLECTOR, ENGINEER, feed_url
 
 BACKHAUL_AT_QUIET_SITE = {
     "site_id": "DMM-052",
@@ -15,10 +18,14 @@ BACKHAUL_AT_QUIET_SITE = {
 }
 
 
+def post_alarm(client: TestClient, payload: dict):
+    return client.post("/api/alarms", json=payload, headers=COLLECTOR)
+
+
 def test_opening_an_incident_is_announced_to_a_connected_dashboard() -> None:
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/incidents") as websocket:
-            client.post("/api/alarms", json=BACKHAUL_AT_QUIET_SITE)
+    with TestClient(app, headers=ENGINEER) as client:
+        with client.websocket_connect(feed_url()) as websocket:
+            post_alarm(client, BACKHAUL_AT_QUIET_SITE)
 
             event = json.loads(websocket.receive_text())
 
@@ -28,14 +35,14 @@ def test_opening_an_incident_is_announced_to_a_connected_dashboard() -> None:
 
 
 def test_a_following_alarm_is_announced_as_an_update() -> None:
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/incidents") as websocket:
-            client.post("/api/alarms", json=BACKHAUL_AT_QUIET_SITE)
+    with TestClient(app, headers=ENGINEER) as client:
+        with client.websocket_connect(feed_url()) as websocket:
+            post_alarm(client, BACKHAUL_AT_QUIET_SITE)
             opened = json.loads(websocket.receive_text())
 
-            client.post(
-                "/api/alarms",
-                json={
+            post_alarm(
+                client,
+                {
                     **BACKHAUL_AT_QUIET_SITE,
                     "code": "VOLTE_REG_FAILURE",
                     "message": "VoLTE registrations are failing",
@@ -59,19 +66,19 @@ def test_a_redelivered_alarm_is_not_announced() -> None:
     """
     payload = {**BACKHAUL_AT_QUIET_SITE, "external_id": "collector-abc-123"}
 
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/incidents") as websocket:
-            client.post("/api/alarms", json=payload)
+    with TestClient(app, headers=ENGINEER) as client:
+        with client.websocket_connect(feed_url()) as websocket:
+            post_alarm(client, payload)
             first = json.loads(websocket.receive_text())
 
-            retry = client.post("/api/alarms", json=payload)
+            retry = post_alarm(client, payload)
             assert retry.status_code == 200
 
             # Prove nothing followed by sending a genuinely new alarm and
             # checking that *it* is the very next message on the socket.
-            client.post(
-                "/api/alarms",
-                json={
+            post_alarm(
+                client,
+                {
                     **BACKHAUL_AT_QUIET_SITE,
                     "code": "TEMPERATURE_HIGH",
                     "message": "Cabinet temperature above threshold",
@@ -85,12 +92,12 @@ def test_a_redelivered_alarm_is_not_announced() -> None:
 
 
 def test_every_connected_dashboard_receives_the_same_event() -> None:
-    with TestClient(app) as client:
+    with TestClient(app, headers=ENGINEER) as client:
         with (
-            client.websocket_connect("/ws/incidents") as first_screen,
-            client.websocket_connect("/ws/incidents") as second_screen,
+            client.websocket_connect(feed_url()) as first_screen,
+            client.websocket_connect(feed_url()) as second_screen,
         ):
-            client.post("/api/alarms", json=BACKHAUL_AT_QUIET_SITE)
+            post_alarm(client, BACKHAUL_AT_QUIET_SITE)
 
             seen_by_first = json.loads(first_screen.receive_text())
             seen_by_second = json.loads(second_screen.receive_text())
@@ -99,15 +106,36 @@ def test_every_connected_dashboard_receives_the_same_event() -> None:
 
 
 def test_a_disconnected_dashboard_stops_being_a_subscriber() -> None:
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/incidents"):
+    with TestClient(app, headers=ENGINEER) as client:
+        with client.websocket_connect(feed_url()):
             pass
 
         # Publishing to nobody must not raise, and must not keep the queue of a
         # socket that has gone away.
-        with client.websocket_connect("/ws/incidents") as websocket:
-            client.post("/api/alarms", json=BACKHAUL_AT_QUIET_SITE)
+        with client.websocket_connect(feed_url()) as websocket:
+            post_alarm(client, BACKHAUL_AT_QUIET_SITE)
             assert json.loads(websocket.receive_text())["type"] == "incident.opened"
+
+
+def test_an_unauthenticated_socket_is_closed_before_it_subscribes() -> None:
+    """
+    Incident data is not public, and a browser cannot send an Authorization
+    header on a WebSocket handshake — so the token travels in the query string
+    and is checked before `accept()`.
+    """
+    with TestClient(app, headers=ENGINEER) as client:
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect("/ws/incidents") as websocket:
+                websocket.receive_text()
+
+
+def test_a_socket_with_a_forged_token_is_closed() -> None:
+    with TestClient(app, headers=ENGINEER) as client:
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect(
+                "/ws/incidents?token=not-a-real-token"
+            ) as websocket:
+                websocket.receive_text()
 
 
 def test_publishing_to_nobody_is_harmless() -> None:

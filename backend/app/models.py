@@ -106,10 +106,28 @@ class RunbookSection(BaseModel):
     anchor: str
     body: str
     applies_to: list[str]
+    requires_supervisor: bool = False
 
     @property
     def citation(self) -> str:
         return f"{self.runbook_title} § {self.heading}"
+
+
+class Credentials(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class AuthenticatedUser(BaseModel):
+    username: str
+    display_name: str
+    role: str
+
+
+class AccessToken(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: AuthenticatedUser
 
 
 class RecommendationStatus(StrEnum):
@@ -139,9 +157,15 @@ class Recommendation(BaseModel):
 
 
 class RecommendationDecision(BaseModel):
-    """An engineer accepting or rejecting a proposed runbook section."""
+    """
+    An engineer accepting or rejecting a proposed runbook section.
 
-    decided_by: str = Field(min_length=1, max_length=120)
+    Note what is *not* here: who made the decision. That comes from the access
+    token, never from the request body. A caller who can name themselves can
+    name anyone, which is the difference between an audit trail and a log of
+    what people typed.
+    """
+
     note: str | None = Field(default=None, max_length=2000)
     modified_steps: str | None = Field(default=None, max_length=8000)
 

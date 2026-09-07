@@ -32,6 +32,7 @@ Applies to: CELL_OUT_OF_SERVICE
 
 ## Never reset equipment blind
 Applies to: CELL_OUT_OF_SERVICE, POWER_UNSTABLE, TEMPERATURE_HIGH
+Requires: supervisor
 
 1. A reset destroys the diagnostic state that explains the fault. Capture logs
    and counters first.

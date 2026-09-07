@@ -21,6 +21,18 @@ class Settings(BaseSettings):
     enable_briefings: bool = False
     briefing_model: str = "claude-opus-5"
 
+    # No default. A shipped default signing secret is the same as no
+    # authentication at all, because anyone who has read the source can mint a
+    # supervisor token. When this is unset the application generates a random
+    # one at startup and says so: tokens then stop working across restarts,
+    # which is inconvenient in development and fatal to nobody in production.
+    jwt_secret: str | None = None
+
+    # Seed logins, for development and the demo. Ignored once real users exist.
+    seed_engineer_password: str = "engineer-dev-password"
+    seed_supervisor_password: str = "supervisor-dev-password"
+    seed_collector_password: str = "collector-dev-password"
+
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")

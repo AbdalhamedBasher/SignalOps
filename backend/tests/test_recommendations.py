@@ -9,6 +9,7 @@ that guarantee rather than about retrieval quality.
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.conftest import COLLECTOR, SUPERVISOR
 
 client = TestClient(app)
 
@@ -66,7 +67,7 @@ def test_an_engineer_can_approve_a_recommendation() -> None:
 
     response = client.post(
         f"/api/recommendations/{recommendation['id']}/approve",
-        json={"decided_by": "nadia.k", "note": "Matches what we saw on site."},
+        json={"note": "Matches what we saw on site."},
     )
 
     assert response.status_code == 200
@@ -83,7 +84,6 @@ def test_an_engineer_can_approve_with_modified_steps() -> None:
     response = client.post(
         f"/api/recommendations/{recommendation['id']}/approve",
         json={
-            "decided_by": "nadia.k",
             "modified_steps": "Skipped step 2, the far end was already down.",
         },
     )
@@ -102,7 +102,7 @@ def test_an_engineer_can_reject_a_recommendation() -> None:
 
     response = client.post(
         f"/api/recommendations/{recommendation['id']}/reject",
-        json={"decided_by": "sam.o", "note": "Already ruled out transport."},
+        json={"note": "Already ruled out transport."},
     )
 
     assert response.status_code == 200
@@ -113,15 +113,24 @@ def test_an_engineer_can_reject_a_recommendation() -> None:
     assert decided["modified_steps"] is None
 
 
-def test_a_decision_requires_naming_who_made_it() -> None:
+def test_a_decision_is_attributed_to_the_token_not_the_request_body() -> None:
+    """
+    The whole point of putting authentication under this.
+
+    A caller cannot decide as somebody else, however they fill in the body:
+    `decided_by` is not a field the API reads.
+    """
     recommendation = propose()[0]
 
     response = client.post(
         f"/api/recommendations/{recommendation['id']}/approve",
-        json={"note": "looks right"},
+        json={"decided_by": "someone.else", "note": "Trying to sign as another."},
+        headers=SUPERVISOR,
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    # Signed in as sam.o, so sam.o is who decided — not the name in the body.
+    assert response.json()["decided_by"] == "sam.o"
 
 
 def test_proposing_records_the_proposal_in_the_audit_trail() -> None:
@@ -139,7 +148,8 @@ def test_the_audit_trail_records_who_decided_and_when() -> None:
 
     client.post(
         f"/api/recommendations/{recommendation['id']}/reject",
-        json={"decided_by": "sam.o", "note": "Not applicable at this site."},
+        json={"note": "Not applicable at this site."},
+        headers=SUPERVISOR,
     )
 
     audit = client.get(f"/api/incidents/{BACKHAUL_INCIDENT}/audit").json()
@@ -160,11 +170,11 @@ def test_the_audit_trail_is_append_only_across_decisions() -> None:
 
     client.post(
         f"/api/recommendations/{recommendation['id']}/approve",
-        json={"decided_by": "nadia.k"},
+        json={},
     )
     client.post(
         f"/api/recommendations/{recommendation['id']}/reject",
-        json={"decided_by": "sam.o", "note": "Changed our minds."},
+        json={"note": "Changed our minds."},
     )
 
     audit = client.get(f"/api/incidents/{BACKHAUL_INCIDENT}/audit").json()
@@ -182,7 +192,7 @@ def test_an_unknown_incident_is_a_404_not_an_empty_list() -> None:
 
 def test_deciding_on_an_unknown_recommendation_is_a_404() -> None:
     response = client.post(
-        "/api/recommendations/REC-9999/approve", json={"decided_by": "nadia.k"}
+        "/api/recommendations/REC-9999/approve", json={}
     )
 
     assert response.status_code == 404
@@ -197,6 +207,7 @@ def test_an_incident_with_no_matching_runbook_gets_no_recommendations() -> None:
             "message": "An alarm nobody has written a procedure for",
             "occurred_at": "2026-08-30T10:00:00Z",
         },
+        headers=COLLECTOR,
     )
 
     incidents = client.get("/api/incidents").json()

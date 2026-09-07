@@ -43,6 +43,7 @@ def to_section(row: RunbookSectionRow) -> RunbookSection:
         anchor=row.anchor,
         body=row.body,
         applies_to=[code.code for code in row.codes],
+        requires_supervisor=row.requires_supervisor,
     )
 
 
@@ -149,6 +150,7 @@ class RunbookRepository:
                     anchor=parsed_section.anchor,
                     body=parsed_section.body,
                     position=parsed_section.position,
+                    requires_supervisor=parsed_section.requires_supervisor,
                     codes=[
                         RunbookSectionCodeRow(code=code)
                         for code in parsed_section.applies_to
@@ -169,6 +171,11 @@ class RunbookRepository:
         return [to_section(row) for row in rows]
 
     # --------------------------------------------------------- recommendations
+
+    def find_recommendation(self, recommendation_id: str) -> Recommendation | None:
+        row = self._session.get(RecommendationRow, recommendation_id)
+
+        return None if row is None else to_recommendation(row)
 
     def recommendations_for(self, incident_id: str) -> list[Recommendation]:
         rows = self._session.scalars(
@@ -234,6 +241,7 @@ class RunbookRepository:
         *,
         approved: bool,
         decision: RecommendationDecision,
+        decided_by: str,
     ) -> Recommendation | None:
         row = self._session.get(RecommendationRow, recommendation_id)
 
@@ -246,7 +254,7 @@ class RunbookRepository:
             else RecommendationStatus.REJECTED.value
         )
         row.decided_at = datetime.now(UTC)
-        row.decided_by = decision.decided_by
+        row.decided_by = decided_by
         row.decision_note = decision.note
         row.modified_steps = decision.modified_steps if approved else None
 
@@ -264,7 +272,7 @@ class RunbookRepository:
             incident_id=row.incident_id,
             recommendation_id=row.id,
             action=action,
-            actor=decision.decided_by,
+            actor=decided_by,
             detail=decision.note or to_section(row.section).citation,
         )
 

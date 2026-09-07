@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
+from app.auth import SIGNING_SECRET, current_user, require_role, seed_users_if_empty
 from app.config import get_settings
 from app.database import SessionFactory, engine, get_session
 from app.events import broadcaster
@@ -24,9 +25,12 @@ from app.generation import (
     build_generator,
 )
 from app.models import (
+    AccessToken,
     AlarmIngestResult,
     AlarmSubmission,
     AuditEvent,
+    AuthenticatedUser,
+    Credentials,
     Incident,
     IncidentEvent,
     IncidentEventType,
@@ -36,7 +40,16 @@ from app.models import (
 )
 from app.repository import IncidentRepository
 from app.runbook_repository import RunbookRepository
+from app.security import (
+    InvalidToken,
+    Role,
+    issue_token,
+    read_token,
+    satisfies,
+    verify_password,
+)
 from app.seed import seed_if_empty
+from app.tables import UserRow
 
 
 @asynccontextmanager
@@ -49,6 +62,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     with SessionFactory() as session:
         seed_if_empty(session)
+        seed_users_if_empty(session)
 
         # Approved runbooks are version-controlled alongside the code, so they
         # are imported at start rather than uploaded. Already-imported files
@@ -107,12 +121,48 @@ def require_incident(
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
+    """Deliberately unauthenticated: load balancers have no credentials."""
     return {"status": "ok"}
+
+
+@app.post("/api/auth/login", response_model=AccessToken)
+def login(
+    credentials: Credentials, session: Session = Depends(get_session)
+) -> AccessToken:
+    row = session.get(UserRow, credentials.username)
+
+    # The same answer whether the account is unknown or the password is wrong.
+    # Distinguishing them turns this endpoint into a way to enumerate accounts.
+    if row is None or not verify_password(credentials.password, row.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = AuthenticatedUser(
+        username=row.username, display_name=row.display_name, role=row.role
+    )
+
+    return AccessToken(
+        access_token=issue_token(
+            username=row.username, role=Role(row.role), secret=SIGNING_SECRET
+        ),
+        user=user,
+    )
+
+
+@app.get("/api/auth/me", response_model=AuthenticatedUser)
+def read_current_user(
+    user: AuthenticatedUser = Depends(current_user),
+) -> AuthenticatedUser:
+    return user
 
 
 @app.get("/api/incidents", response_model=list[Incident])
 def get_incidents(
     repository: IncidentRepository = Depends(get_repository),
+    _: AuthenticatedUser = Depends(current_user),
 ) -> list[Incident]:
     return repository.list_incidents()
 
@@ -123,6 +173,10 @@ def ingest_alarm(
     response: Response,
     session: Session = Depends(get_session),
     repository: IncidentRepository = Depends(get_repository),
+    # A collector is a machine principal. Requiring that role here means a
+    # stolen engineer token cannot fabricate network events, and a stolen
+    # collector token cannot approve anything.
+    _: AuthenticatedUser = Depends(require_role(Role.COLLECTOR)),
 ) -> AlarmIngestResult:
     """
     Accept one raw alarm and return the incident it belongs to.
@@ -168,6 +222,7 @@ def get_recommendations(
     incident_id: str,
     repository: IncidentRepository = Depends(get_repository),
     runbooks: RunbookRepository = Depends(get_runbooks),
+    _: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
 ) -> list[Recommendation]:
     require_incident(incident_id, repository)
 
@@ -182,6 +237,7 @@ def propose_recommendations(
     incident_id: str,
     repository: IncidentRepository = Depends(get_repository),
     runbooks: RunbookRepository = Depends(get_runbooks),
+    _: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
 ) -> list[Recommendation]:
     """
     Retrieve the runbook sections that apply to this incident.
@@ -202,6 +258,7 @@ def approve_recommendation(
     recommendation_id: str,
     decision: RecommendationDecision,
     runbooks: RunbookRepository = Depends(get_runbooks),
+    user: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
 ) -> Recommendation:
     """
     Record an engineer accepting a procedure, optionally with changes.
@@ -210,8 +267,32 @@ def approve_recommendation(
     the steps, by design: nothing here should be able to touch the network
     without a human doing it.
     """
+    existing = runbooks.find_recommendation(recommendation_id)
+
+    if existing is None:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown recommendation {recommendation_id}"
+        )
+
+    # Some procedures carry a `Requires: supervisor` line — resets that destroy
+    # diagnostic state, anything touching emergency calling. The runbook
+    # authors decided that, not this codebase, and it is enforced here rather
+    # than left to the engineer to remember at three in the morning.
+    if existing.section.requires_supervisor and not satisfies(
+        Role(user.role), Role.SUPERVISOR
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"{existing.section.citation} requires a supervisor to approve it."
+            ),
+        )
+
     recommendation = runbooks.decide(
-        recommendation_id, approved=True, decision=decision
+        recommendation_id,
+        approved=True,
+        decision=decision,
+        decided_by=user.username,
     )
 
     if recommendation is None:
@@ -230,9 +311,17 @@ def reject_recommendation(
     recommendation_id: str,
     decision: RecommendationDecision,
     runbooks: RunbookRepository = Depends(get_runbooks),
+    user: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
 ) -> Recommendation:
+    """
+    Decline a procedure. No supervisor gate: declining to act is always safe,
+    and requiring escalation to say "not this one" would slow an outage down.
+    """
     recommendation = runbooks.decide(
-        recommendation_id, approved=False, decision=decision
+        recommendation_id,
+        approved=False,
+        decision=decision,
+        decided_by=user.username,
     )
 
     if recommendation is None:
@@ -248,6 +337,7 @@ def get_briefing(
     incident_id: str,
     repository: IncidentRepository = Depends(get_repository),
     runbooks: RunbookRepository = Depends(get_runbooks),
+    _: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
 ) -> StoredBriefing | None:
     require_incident(incident_id, repository)
 
@@ -259,6 +349,8 @@ def generate_briefing(
     incident_id: str,
     repository: IncidentRepository = Depends(get_repository),
     runbooks: RunbookRepository = Depends(get_runbooks),
+    # This one spends money on every call, so it is not left open.
+    _: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
 ) -> StoredBriefing:
     """
     Summarise the already-retrieved runbook sections for this incident.
@@ -286,6 +378,7 @@ def get_audit_trail(
     incident_id: str,
     repository: IncidentRepository = Depends(get_repository),
     runbooks: RunbookRepository = Depends(get_runbooks),
+    _: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
 ) -> list[AuditEvent]:
     require_incident(incident_id, repository)
 
@@ -293,14 +386,28 @@ def get_audit_trail(
 
 
 @app.websocket("/ws/incidents")
-async def incident_feed(websocket: WebSocket) -> None:
+async def incident_feed(websocket: WebSocket, token: str = "") -> None:
     """
     Push incident changes to a dashboard for as long as it stays connected.
 
     Deliberately send-only. A socket carries what happened while the client was
     listening and nothing more, so a client that reconnects re-fetches the full
     board over HTTP rather than expecting this to replay anything it missed.
+
+    The token arrives as a query parameter because browsers cannot set headers
+    on a WebSocket handshake. That is a real cost: query strings end up in
+    access logs and proxy logs in a way Authorization headers do not. The
+    production fix is a short-lived single-use ticket fetched over HTTP and
+    exchanged here; this is the honest MVP version of that.
     """
+    try:
+        read_token(token, secret=SIGNING_SECRET)
+    except InvalidToken:
+        # Refuse before accepting, so an unauthenticated client never becomes
+        # a subscriber at all.
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await websocket.accept()
 
     with broadcaster.subscribe() as queue:

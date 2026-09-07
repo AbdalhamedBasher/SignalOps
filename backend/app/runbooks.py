@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 APPLIES_TO_PATTERN = re.compile(r"^applies\s+to\s*:\s*(.+)$", re.IGNORECASE)
+REQUIRES_PATTERN = re.compile(r"^requires\s*:\s*(.+)$", re.IGNORECASE)
 SECTION_HEADING = "## "
 TITLE_HEADING = "# "
 
@@ -27,6 +28,9 @@ class ParsedSection:
     # Alarm codes this section is written for. Empty means it is general
     # guidance rather than advice for a specific fault.
     applies_to: list[str] = field(default_factory=list)
+    # Set by a `Requires: supervisor` line. The runbook authors decide which of
+    # their own procedures need a supervisor to accept them.
+    requires_supervisor: bool = False
 
 
 @dataclass
@@ -77,6 +81,7 @@ def parse_runbook(markdown: str, *, fallback_title: str = "Untitled runbook") ->
     current_heading: str | None = None
     current_codes: list[str] = []
     current_lines: list[str] = []
+    current_requires_supervisor = False
 
     def flush() -> None:
         if current_heading is None:
@@ -89,6 +94,7 @@ def parse_runbook(markdown: str, *, fallback_title: str = "Untitled runbook") ->
                 body=reflow("\n".join(current_lines)),
                 position=len(sections),
                 applies_to=list(current_codes),
+                requires_supervisor=current_requires_supervisor,
             )
         )
 
@@ -100,6 +106,7 @@ def parse_runbook(markdown: str, *, fallback_title: str = "Untitled runbook") ->
             current_heading = line[len(SECTION_HEADING) :].strip()
             current_codes = []
             current_lines = []
+            current_requires_supervisor = False
             continue
 
         if line.startswith(TITLE_HEADING):
@@ -117,6 +124,14 @@ def parse_runbook(markdown: str, *, fallback_title: str = "Untitled runbook") ->
                 for code in applies_to.group(1).split(",")
                 if code.strip()
             ]
+            continue
+
+        requires = REQUIRES_PATTERN.match(line.strip())
+
+        if requires is not None:
+            current_requires_supervisor = (
+                "supervisor" in requires.group(1).strip().lower()
+            )
             continue
 
         current_lines.append(line)

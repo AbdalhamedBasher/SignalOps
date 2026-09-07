@@ -12,6 +12,7 @@ Applies to: VOLTE_REG_FAILURE
 
 ## Protect emergency calling
 Applies to: VOLTE_REG_FAILURE, CELL_OUT_OF_SERVICE
+Requires: supervisor
 
 1. Confirm whether subscribers at the affected site can still reach emergency
    services through circuit-switched fallback.

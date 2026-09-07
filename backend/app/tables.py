@@ -9,7 +9,7 @@ storage decision silently becomes an API change, and vice versa.
 
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, UtcDateTime
@@ -69,6 +69,18 @@ class AlarmRow(Base):
     incident: Mapped[IncidentRow] = relationship(back_populates="alarms")
 
 
+class UserRow(Base):
+    __tablename__ = "users"
+
+    username: Mapped[str] = mapped_column(String(120), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(120))
+    role: Mapped[str] = mapped_column(String(16), index=True)
+    # Only ever the Argon2id hash. Nothing in this application stores, logs, or
+    # returns a password.
+    password_hash: Mapped[str] = mapped_column(String(256))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 class RunbookRow(Base):
     __tablename__ = "runbooks"
 
@@ -100,6 +112,10 @@ class RunbookSectionRow(Base):
     anchor: Mapped[str] = mapped_column(String(200))
     body: Mapped[str] = mapped_column(Text)
     position: Mapped[int] = mapped_column(Integer)
+    # Declared in the runbook itself with a `Requires: supervisor` line. The
+    # authority to accept a procedure belongs with the people who wrote it, not
+    # with this codebase.
+    requires_supervisor: Mapped[bool] = mapped_column(Boolean, default=False)
 
     runbook: Mapped[RunbookRow] = relationship(back_populates="sections")
     codes: Mapped[list["RunbookSectionCodeRow"]] = relationship(
