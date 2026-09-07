@@ -174,23 +174,29 @@ class RecommendationRow(Base):
     )
 
 
-class BriefingRow(Base):
+class TriageRow(Base):
     """
-    A generated briefing, kept because it was shown to an engineer.
+    A triage report, kept because it was shown to an engineer.
 
     The model id and the cited sections are stored alongside the prose so that
     a decision made after reading it can be reconstructed later — including
     which version of which model wrote it.
     """
 
-    __tablename__ = "briefings"
+    __tablename__ = "triage_reports"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     number: Mapped[int] = mapped_column(Integer, unique=True, index=True)
     incident_id: Mapped[str] = mapped_column(
         ForeignKey("incidents.id", ondelete="CASCADE"), index=True
     )
+    # What the agent concluded about real customer impact, after calling the
+    # network APIs rather than trusting the alarms.
+    verdict: Mapped[str] = mapped_column(String(16), default="unknown")
     summary: Mapped[str] = mapped_column(Text)
+    # The network readings it relied on, and the tools it chose to call.
+    evidence: Mapped[str] = mapped_column(Text, default="[]")
+    trace: Mapped[str] = mapped_column(Text, default="[]")
     first_actions: Mapped[str] = mapped_column(Text)
     cited_section_ids: Mapped[str] = mapped_column(String(400))
     gaps: Mapped[str | None] = mapped_column(Text, nullable=True)

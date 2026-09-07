@@ -19,11 +19,6 @@ from app.auth import SIGNING_SECRET, current_user, require_role, seed_users_if_e
 from app.config import get_settings
 from app.database import SessionFactory, engine, get_session
 from app.events import broadcaster
-from app.generation import (
-    BriefingUnavailable,
-    UngroundedBriefing,
-    build_generator,
-)
 from app.models import (
     AccessToken,
     AlarmIngestResult,
@@ -34,10 +29,12 @@ from app.models import (
     Incident,
     IncidentEvent,
     IncidentEventType,
+    IncidentStatus,
     Recommendation,
     RecommendationDecision,
-    StoredBriefing,
+    StoredTriage,
 )
+from app.network_intelligence import NokiaNetworkAsCode, SimulatedNetwork
 from app.repository import IncidentRepository
 from app.runbook_repository import RunbookRepository
 from app.security import (
@@ -50,6 +47,11 @@ from app.security import (
 )
 from app.seed import seed_if_empty
 from app.tables import UserRow
+from app.triage import (
+    TriageUnavailable,
+    UngroundedTriage,
+    build_triage_service,
+)
 
 
 @asynccontextmanager
@@ -84,11 +86,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Built once at import: constructing the Anthropic client per request would
-# open a new connection pool every time. Tests replace this attribute.
-briefing_generator = build_generator(
-    enabled=get_settings().enable_briefings,
-    model=get_settings().briefing_model,
+# Built once at import: constructing the model client per request would open a
+# new connection pool every time. Tests replace this attribute.
+triage_service = build_triage_service(
+    api_key=get_settings().google_api_key,
+    model_name=get_settings().triage_model,
 )
 
 app.add_middleware(
@@ -106,6 +108,34 @@ def get_repository(session: Session = Depends(get_session)) -> IncidentRepositor
 
 def get_runbooks(session: Session = Depends(get_session)) -> RunbookRepository:
     return RunbookRepository(session)
+
+
+def get_network(
+    repository: IncidentRepository = Depends(get_repository),
+):
+    """
+    The CAMARA network client the agent is given for this request.
+
+    With a Nokia key configured this talks to Network as Code. Without one it
+    is a deterministic simulator seeded from the current incident board, so the
+    signals it returns agree with what the board is reporting. Which of the two
+    answered is recorded on every reading and shown in the UI, so simulated
+    data can never be mistaken for live data.
+    """
+    settings = get_settings()
+
+    if settings.nokia_api_key:
+        return NokiaNetworkAsCode(
+            base_url=settings.nokia_base_url, api_key=settings.nokia_api_key
+        )
+
+    degraded = {
+        incident.site_id: incident.severity.value
+        for incident in repository.list_incidents()
+        if incident.status is not IncidentStatus.RESOLVED
+    }
+
+    return SimulatedNetwork(degraded_sites=degraded)
 
 
 def require_incident(
@@ -332,45 +362,46 @@ def reject_recommendation(
     return recommendation
 
 
-@app.get("/api/incidents/{incident_id}/briefing", response_model=StoredBriefing | None)
-def get_briefing(
+@app.get("/api/incidents/{incident_id}/triage", response_model=StoredTriage | None)
+def get_triage(
     incident_id: str,
     repository: IncidentRepository = Depends(get_repository),
     runbooks: RunbookRepository = Depends(get_runbooks),
     _: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
-) -> StoredBriefing | None:
+) -> StoredTriage | None:
     require_incident(incident_id, repository)
 
-    return runbooks.latest_briefing(incident_id)
+    return runbooks.latest_triage(incident_id)
 
 
-@app.post("/api/incidents/{incident_id}/briefing", response_model=StoredBriefing)
-def generate_briefing(
+@app.post("/api/incidents/{incident_id}/triage", response_model=StoredTriage)
+def run_triage(
     incident_id: str,
     repository: IncidentRepository = Depends(get_repository),
     runbooks: RunbookRepository = Depends(get_runbooks),
-    # This one spends money on every call, so it is not left open.
+    network=Depends(get_network),
     _: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
-) -> StoredBriefing:
+) -> StoredTriage:
     """
-    Summarise the already-retrieved runbook sections for this incident.
+    Ask the triage agent whether this incident is real and who it is hitting.
 
-    The model never decides which procedures are relevant — retrieval does that
-    deterministically first, and the model only writes the orientation over
-    what it is handed. A briefing citing anything it was not given is refused.
+    The agent decides which CAMARA network APIs to call — device reachability,
+    congestion — reads the runbook sections retrieval already matched, and
+    returns a verdict citing what it used. It changes nothing on the network:
+    its recommendations still pass through the same human approval gate.
     """
     incident = require_incident(incident_id, repository)
     recommendations = runbooks.recommendations_for(incident_id)
 
     try:
-        briefing = briefing_generator.generate(incident, recommendations)
-    except UngroundedBriefing as error:
-        # 502: the upstream model produced something we will not pass on.
+        triage = triage_service.triage(incident, recommendations, network)
+    except UngroundedTriage as error:
+        # 502: the agent produced something we will not pass on.
         raise HTTPException(status_code=502, detail=str(error)) from error
-    except BriefingUnavailable as error:
+    except TriageUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
 
-    return runbooks.store_briefing(incident_id, briefing)
+    return runbooks.store_triage(incident_id, triage)
 
 
 @app.get("/api/incidents/{incident_id}/audit", response_model=list[AuditEvent])

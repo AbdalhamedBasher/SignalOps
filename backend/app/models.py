@@ -182,22 +182,27 @@ class AuditEvent(BaseModel):
     _normalize_occurred_at = field_validator("occurred_at")(require_timezone)
 
 
-class GeneratedBriefing(BaseModel):
+class GeneratedTriage(BaseModel):
     """
-    A model-written orientation over already-retrieved runbook sections.
+    What the triage agent concluded, after consulting the network.
 
-    `cited_section_ids` has been checked against the sections the model was
-    given before this object exists; an unverified citation never reaches here.
+    `cited_section_ids` has been checked against the sections the agent was
+    actually given before this object exists; an unverified citation never
+    reaches here. `trace` records which CAMARA APIs it chose to call, so the
+    reasoning is inspectable rather than taken on trust.
     """
 
+    verdict: str
     summary: str
-    first_actions: list[str]
-    cited_section_ids: list[str]
+    evidence: list[str] = []
+    first_actions: list[str] = []
+    cited_section_ids: list[str] = []
     gaps: str | None = None
     model: str
+    trace: list[str] = []
 
 
-class StoredBriefing(GeneratedBriefing):
+class StoredTriage(GeneratedTriage):
     id: str
     incident_id: str
     generated_at: datetime

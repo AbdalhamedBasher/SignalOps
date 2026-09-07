@@ -8,27 +8,27 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.generation import deserialise_actions, serialise_actions
 from app.models import (
     AuditEvent,
-    GeneratedBriefing,
+    GeneratedTriage,
     Incident,
     Recommendation,
     RecommendationDecision,
     RecommendationStatus,
     RunbookSection,
-    StoredBriefing,
+    StoredTriage,
 )
 from app.retrieval import retrieve_for_incident
 from app.runbooks import ParsedRunbook, load_runbook_directory
 from app.tables import (
     AuditEventRow,
-    BriefingRow,
     RecommendationRow,
     RunbookRow,
     RunbookSectionCodeRow,
     RunbookSectionRow,
+    TriageRow,
 )
+from app.triage import deserialise, serialise
 
 RUNBOOK_DIRECTORY = Path(__file__).resolve().parents[1] / "runbooks"
 
@@ -63,12 +63,15 @@ def to_recommendation(row: RecommendationRow) -> Recommendation:
     )
 
 
-def to_briefing(row: BriefingRow) -> StoredBriefing:
-    return StoredBriefing(
+def to_triage(row: TriageRow) -> StoredTriage:
+    return StoredTriage(
         id=row.id,
         incident_id=row.incident_id,
+        verdict=row.verdict,
         summary=row.summary,
-        first_actions=deserialise_actions(row.first_actions),
+        evidence=deserialise(row.evidence),
+        trace=deserialise(row.trace),
+        first_actions=deserialise(row.first_actions),
         cited_section_ids=[
             section_id for section_id in row.cited_section_ids.split(",") if section_id
         ],
@@ -280,31 +283,34 @@ class RunbookRepository:
 
         return to_recommendation(row)
 
-    # ---------------------------------------------------------------- briefings
+    # ------------------------------------------------------------------ triage
 
-    def latest_briefing(self, incident_id: str) -> StoredBriefing | None:
+    def latest_triage(self, incident_id: str) -> StoredTriage | None:
         row = self._session.scalars(
-            select(BriefingRow)
-            .where(BriefingRow.incident_id == incident_id)
-            .order_by(BriefingRow.number.desc())
+            select(TriageRow)
+            .where(TriageRow.incident_id == incident_id)
+            .order_by(TriageRow.number.desc())
             .limit(1)
         ).first()
 
-        return None if row is None else to_briefing(row)
+        return None if row is None else to_triage(row)
 
-    def store_briefing(
-        self, incident_id: str, briefing: GeneratedBriefing
-    ) -> StoredBriefing:
-        number = self._next_number(BriefingRow)
-        row = BriefingRow(
-            id=f"BRF-{number:04d}",
+    def store_triage(
+        self, incident_id: str, triage: GeneratedTriage
+    ) -> StoredTriage:
+        number = self._next_number(TriageRow)
+        row = TriageRow(
+            id=f"TRI-{number:04d}",
             number=number,
             incident_id=incident_id,
-            summary=briefing.summary,
-            first_actions=serialise_actions(briefing.first_actions),
-            cited_section_ids=",".join(briefing.cited_section_ids),
-            gaps=briefing.gaps,
-            model=briefing.model,
+            verdict=triage.verdict,
+            summary=triage.summary,
+            evidence=serialise(triage.evidence),
+            trace=serialise(triage.trace),
+            first_actions=serialise(triage.first_actions),
+            cited_section_ids=",".join(triage.cited_section_ids),
+            gaps=triage.gaps,
+            model=triage.model,
             generated_at=datetime.now(UTC),
         )
 
@@ -314,15 +320,16 @@ class RunbookRepository:
         self.record(
             incident_id=incident_id,
             recommendation_id=None,
-            action="briefing.generated",
-            actor=briefing.model,
+            action="triage.generated",
+            actor=triage.model,
             detail=(
-                f"Generated a briefing citing "
-                f"{', '.join(briefing.cited_section_ids) or 'no sections'}"
+                f"Verdict {triage.verdict}; consulted "
+                f"{len(triage.trace)} source(s); cited "
+                f"{', '.join(triage.cited_section_ids) or 'no sections'}"
             ),
         )
 
-        return to_briefing(row)
+        return to_triage(row)
 
     # ------------------------------------------------------------------- audit
 

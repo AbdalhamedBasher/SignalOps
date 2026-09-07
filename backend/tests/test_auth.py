@@ -153,7 +153,7 @@ def test_the_board_is_not_public() -> None:
     assert bare.get("/api/incidents").status_code == 401
     assert bare.get("/api/incidents/INC-1001/recommendations").status_code == 401
     assert bare.get("/api/incidents/INC-1001/audit").status_code == 401
-    assert bare.post("/api/incidents/INC-1001/briefing").status_code == 401
+    assert bare.post("/api/incidents/INC-1001/triage").status_code == 401
 
 
 def test_health_stays_open_because_load_balancers_have_no_credentials() -> None:

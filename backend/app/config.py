@@ -15,11 +15,18 @@ class Settings(BaseSettings):
     #   DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/signalops
     database_url: str = "sqlite:///./signalops.db"
 
-    # Off by default: generated briefings call a paid API and the rest of the
-    # product works without them. Enabling is an explicit decision, not
-    # something that switches itself on because a key happens to be present.
-    enable_briefings: bool = False
-    briefing_model: str = "claude-opus-5"
+    # The triage agent's model. Google AI Studio issues a free key with no
+    # credit card, and Gemini is on the hackathon's approved provider list.
+    # Flash by default: the free tier is generous and a live demo cannot
+    # afford to be rate-limited. Swap to gemini-2.5-pro for deeper reasoning.
+    google_api_key: str | None = None
+    triage_model: str = "gemini-2.5-flash"
+
+    # Nokia Network as Code. Without a key the CAMARA calls run against the
+    # deterministic simulator, which is what Nokia recommends for development
+    # and what keeps a demo alive when the network is not reachable.
+    nokia_api_key: str | None = None
+    nokia_base_url: str = "https://network-as-code.p-eu.rapidapi.com"
 
     # No default. A shipped default signing secret is the same as no
     # authentication at all, because anyone who has read the source can mint a
