@@ -1430,3 +1430,42 @@ h3 {
     grid-column: auto;
   }
 }
+
+/* ---------- triage: the agent working, live ---------- */
+
+.triage__live {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 12px 12px 0;
+  background: rgba(84, 224, 180, 0.06);
+}
+
+.triage__trace-item--pending .triage__trace-detail {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.triage__trace-tag--pending {
+  color: #082119;
+  background: var(--accent);
+}
+
+/* The one moving thing on screen while a run is in flight. */
+.triage__trace-item--pending .triage__trace-tag--pending {
+  animation: triage-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes triage-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .triage__trace-item--pending .triage__trace-tag--pending {
+    animation: none;
+  }
+}

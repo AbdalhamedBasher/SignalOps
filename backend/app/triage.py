@@ -36,6 +36,7 @@ class TriageService(Protocol):
         incident: Incident,
         recommendations: list[Recommendation],
         network: NetworkIntelligence,
+        trace: list[str] | None = None,
     ) -> GeneratedTriage: ...
 
 
@@ -73,8 +74,13 @@ class GeminiTriageService:
         incident: Incident,
         recommendations: list[Recommendation],
         network: NetworkIntelligence,
+        trace: list[str] | None = None,
     ) -> GeneratedTriage:
-        trace: list[str] = []
+        # The caller may pass its own list in order to watch tool calls land
+        # while the run is still going. A live triage takes about half a
+        # minute, most of it real network round-trips, and an engineer staring
+        # at a still spinner has no idea whether anything is happening.
+        trace = [] if trace is None else trace
         deps = TriageDeps(
             incident=incident,
             recommendations=recommendations,
@@ -117,6 +123,7 @@ class NullTriageService:
         incident: Incident,
         recommendations: list[Recommendation],
         network: NetworkIntelligence,
+        trace: list[str] | None = None,
     ) -> GeneratedTriage:
         raise TriageUnavailable(
             "The triage agent is not configured. Set GOOGLE_API_KEY (free from "

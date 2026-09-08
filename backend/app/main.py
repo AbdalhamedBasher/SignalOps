@@ -1,5 +1,8 @@
 import asyncio
-from collections.abc import AsyncIterator
+import json
+import threading
+import time
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 
 from fastapi import (
@@ -12,6 +15,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
@@ -404,6 +408,95 @@ def run_triage(
         raise HTTPException(status_code=503, detail=str(error)) from error
 
     return runbooks.store_triage(incident_id, triage)
+
+
+@app.post("/api/incidents/{incident_id}/triage/stream")
+def run_triage_streaming(
+    incident_id: str,
+    repository: IncidentRepository = Depends(get_repository),
+    runbooks: RunbookRepository = Depends(get_runbooks),
+    network=Depends(get_network),
+    _: AuthenticatedUser = Depends(require_role(Role.ENGINEER)),
+) -> StreamingResponse:
+    """
+    The same triage, but reporting each step as it happens.
+
+    A live run takes roughly half a minute, most of it real round-trips to
+    Nokia. Delivering that as one silent wait tells an engineer nothing about
+    whether anything is working — so the agent's tool calls are streamed as
+    newline-delimited JSON while the run is still going, and the finished
+    report arrives on the same connection.
+
+    Newline-delimited JSON rather than Server-Sent Events because the browser's
+    EventSource cannot send an Authorization header, and these endpoints are
+    authenticated.
+    """
+    incident = require_incident(incident_id, repository)
+    recommendations = runbooks.recommendations_for(incident_id)
+
+    def emit() -> Iterator[str]:
+        # The agent appends to this list as it calls each tool; the loop below
+        # watches it from the outside while the run proceeds on another thread.
+        trace: list[str] = []
+        outcome: dict[str, object] = {}
+
+        def run() -> None:
+            try:
+                outcome["triage"] = triage_service.triage(
+                    incident, recommendations, network, trace
+                )
+            except Exception as error:  # surfaced to the client below
+                outcome["error"] = error
+
+        worker = threading.Thread(target=run, daemon=True)
+        worker.start()
+
+        yield json.dumps({"type": "started", "incident_id": incident_id}) + "\n"
+
+        sent = 0
+        while worker.is_alive() or sent < len(trace):
+            while sent < len(trace):
+                yield json.dumps({"type": "step", "text": trace[sent]}) + "\n"
+                sent += 1
+
+            if worker.is_alive():
+                time.sleep(0.25)
+
+        worker.join()
+
+        error = outcome.get("error")
+
+        if isinstance(error, UngroundedTriage):
+            yield json.dumps({"type": "error", "status": 502, "detail": str(error)}) + "\n"
+            return
+
+        if isinstance(error, Exception):
+            yield json.dumps({"type": "error", "status": 503, "detail": str(error)}) + "\n"
+            return
+
+        triage = outcome["triage"]
+        stored = runbooks.store_triage(incident_id, triage)  # type: ignore[arg-type]
+        session_commit(runbooks)
+
+        yield json.dumps({"type": "report", "report": stored.model_dump(mode="json")}) + "\n"
+
+    return StreamingResponse(
+        emit(),
+        media_type="application/x-ndjson",
+        # Proxies that buffer would defeat the entire point of streaming.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def session_commit(runbooks: RunbookRepository) -> None:
+    """
+    Commit before the response finishes.
+
+    A streaming response outlives the request handler, so the per-request
+    session teardown that normally commits has not run yet by the time the
+    report is written.
+    """
+    runbooks._session.commit()  # noqa: SLF001
 
 
 @app.get("/api/incidents/{incident_id}/audit", response_model=list[AuditEvent])

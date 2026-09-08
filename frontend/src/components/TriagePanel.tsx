@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { fetchTriage, requestTriage } from "../api/triage";
+import { fetchTriage, streamTriage } from "../api/triage";
 import type { ImpactVerdict, StoredTriage } from "../types/recommendation";
 
 type TriagePanelProps = {
@@ -82,6 +82,9 @@ export function TriagePanel({
 }: TriagePanelProps) {
   const [triage, setTriage] = useState<StoredTriage | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  // Tool calls as they land, so the half-minute run shows its working
+  // rather than a still spinner.
+  const [liveSteps, setLiveSteps] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -111,7 +114,16 @@ export function TriagePanel({
     try {
       setIsGenerating(true);
       setErrorMessage("");
-      setTriage(await requestTriage(incidentId));
+      // Clear the previous run's steps, so what is on screen always belongs to
+      // the run in progress.
+      setLiveSteps([]);
+      setTriage(null);
+
+      const report = await streamTriage(incidentId, (step) =>
+        setLiveSteps((current) => [...current, step]),
+      );
+
+      setTriage(report);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Could not complete triage",
@@ -156,7 +168,37 @@ export function TriagePanel({
         </div>
       )}
 
-      {!triage && !errorMessage && (
+      {isGenerating && (
+        <div className="triage__live" aria-live="polite">
+          <h4 className="triage__subheading">Agent working…</h4>
+          <ol className="triage__trace-list">
+            {liveSteps.map((step, idx) => {
+              const { tag, tagClass, detail } = classifyTraceItem(step);
+              return (
+                <li key={idx} className="triage__trace-item">
+                  <span className={`triage__trace-tag ${tagClass}`}>{tag}</span>
+                  <span className="triage__trace-detail">{detail}</span>
+                </li>
+              );
+            })}
+            {/* The step in flight. A live run makes real round-trips to Nokia,
+                so this is the honest state: something is happening, and we do
+                not yet know what it will return. */}
+            <li className="triage__trace-item triage__trace-item--pending">
+              <span className="triage__trace-tag triage__trace-tag--pending">
+                In flight
+              </span>
+              <span className="triage__trace-detail">
+                {liveSteps.length === 0
+                  ? "Deciding which network signals this incident needs…"
+                  : "Reasoning over what the network returned…"}
+              </span>
+            </li>
+          </ol>
+        </div>
+      )}
+
+      {!triage && !errorMessage && !isGenerating && (
         <div className="triage__idle">
           {hasRecommendations ? (
             <p>
