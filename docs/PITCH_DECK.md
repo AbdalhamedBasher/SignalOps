@@ -14,7 +14,7 @@
 | **CAMARA Network APIs** | Did not mention network APIs at all | **Slides 4 & 6**: Feature **Device Reachability Status** and **Congestion Insights** on **Nokia Network as Code** as the core intelligence source. |
 | **AI Agent Layer Orchestration** | N/A | **Slide 5**: Details how **Google Gemini** via **Pydantic AI** autonomously calls CAMARA APIs as tools rather than passive UI buttons. |
 | **Mandatory Theme Alignment** | Ambiguous | **Slide 1 & Throughout**: Explicitly anchored in **Industrial & Enterprise AI Automation**. |
-| **Telemetry Honesty** | Risk of claiming live subscriber telemetry without carrier access | **Slide 8**: Transparent disclosure of the deterministic CAMARA simulator for reliable rehearsal, swappable to Nokia sandbox credentials. |
+| **Telemetry Honesty** | Risk of claiming live subscriber telemetry without carrier access | **Slide 8**: Both CAMARA APIs call Nokia's platform live through its official SDK, in Nokia's Simulator mode. The API integration is real; the network data behind it is Nokia's simulation, and we say so rather than implying commercial telemetry. |
 
 ---
 
@@ -220,15 +220,18 @@ flowchart LR
 - **Test Suite Completeness**:
   - **92 passing automated tests** covering correlation, persistence, realtime sockets, runbooks, auth, and agent tool execution.
   - Pydantic AI `TestModel` test verifies CAMARA tools are invoked during triage without spending model quota.
-- **Honest Telemetry Disclosure (Judges Respect Limits)**:
-  - **Deterministic CAMARA Simulator**: Used by default when no Nokia API key is configured. Seeded from the live incident board so readings consistently reflect fault states.
-  - **Nokia Network as Code Client**: Implemented against official CAMARA endpoint specifications (`CAMARA_REACHABILITY_PATH`, `CAMARA_CONGESTION_PATH`), swappable via one configuration value (`NOKIA_API_KEY`).
-  - **Clear UI Labeling**: Every reading prominently tags its data source (`CAMARA Simulator` vs `Live Nokia Network as Code`).
+- **Live Nokia Integration, Precisely Stated**:
+  - **Both CAMARA APIs answer from Nokia's platform.** Device Reachability Status and Congestion Insights are called through Nokia's official `network-as-code` SDK, not hand-rolled HTTP. Every reading is stamped `nokia-network-as-code`.
+  - **Running in Nokia's Simulator mode** — the mode Nokia and the organisers recommend. The API integration is real; the network data behind it is Nokia's simulation. We are not claiming live commercial subscriber telemetry, and no billing account is required.
+  - **A deterministic local simulator remains** as the fallback when no key is configured, so a rate limit or an outage can never kill the demo.
+  - **Clear UI Labeling**: Every reading tags its origin, so simulated and platform data can never be confused.
 
 ### Speaker Notes
-> *"We believe in engineering transparency. The reviewer noted that judges respect stated technical boundaries more than claims that collapse under questioning.*
+> *"We are precise about what is real here, because the distinction matters.*
 >
-> *SignalOps AI has 92 passing automated tests. To ensure a reliable demo without network latency or external rate limits, our CAMARA layer runs against a deterministic simulator seeded from the incident board. Swapping to Nokia's live sandbox is a single configuration key."*
+> *Both CAMARA APIs are called live against Nokia's Network as Code platform, through Nokia's own SDK. Our account runs in Simulator mode — the mode Nokia recommends and the organisers suggested — so the API integration is genuine while the network data behind it is Nokia's simulation. We are not claiming live commercial telemetry.*
+>
+> *Building it live caught things a mock never would: Nokia's SDK ships a default host that rejects console-issued keys, and our first hand-written endpoint paths were wrong in both APIs. It also caught a reasoning fault in our own agent — on a healthy site it reported impact confirmed while its own evidence said nothing was unreachable. We found that because we ran it against the real thing."*
 
 ---
 

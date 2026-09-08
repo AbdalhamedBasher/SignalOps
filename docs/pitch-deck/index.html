@@ -492,7 +492,7 @@
     </article>
 
     <!-- Slide 8: Technical Validation & Transparency -->
-    <article class="slide" data-notes="We are completely transparent about what is simulated. Our deterministic simulator provides consistent, repeatable readings seeded from the board state. Swapping to Nokia Network as Code sandbox is a single setting.">
+    <article class="slide" data-notes="We are precise about what is real, because the distinction matters. Both CAMARA APIs are called live against Nokia Network as Code through Nokia's own SDK. Our account runs in Simulator mode, which Nokia and the organisers recommend, so the API integration is genuine while the network data behind it is Nokia's simulation. We do not claim live commercial telemetry. Building it live caught things a mock never would: Nokia's SDK ships a default host that rejects console-issued keys, and it caught a reasoning fault in our own agent that the local simulator had hidden.">
       <p class="slide__tag">Engineering Rigor</p>
       <h2 class="slide__title">Technical Validation & Transparent Telemetry</h2>
       <div class="slide__content">
@@ -503,10 +503,10 @@
             <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);">Pydantic AI <code>TestModel</code> proves both CAMARA tools are wired and invoked without consuming live quota.</p>
           </div>
           <div class="card">
-            <h3>Honest Telemetry Boundaries</h3>
-            <p><strong>Deterministic Simulator</strong>: Default for offline testing & reliable demo rehearsal; seeded from incident severity.</p>
-            <p style="margin-top: 8px;"><strong>Live Nokia Client</strong>: Implemented against official CAMARA specs, toggled by setting <code>NOKIA_API_KEY</code>.</p>
-            <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">Every reading prominently labels its source on screen so simulated data is never mistaken for live data.</p>
+            <h3>Live Nokia, Precisely Stated</h3>
+            <p><strong>Both CAMARA APIs answer from Nokia's platform</strong>, called through Nokia's official <code>network-as-code</code> SDK. Every reading is stamped <code>nokia-network-as-code</code>.</p>
+            <p style="margin-top: 8px;"><strong>Nokia Simulator mode</strong> — as Nokia and the organisers recommend. The API integration is real; the network data behind it is Nokia's simulation. We do not claim live commercial telemetry.</p>
+            <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">A local simulator remains as fallback, so a rate limit can never kill the demo. Every reading labels its origin on screen.</p>
           </div>
         </div>
       </div>
