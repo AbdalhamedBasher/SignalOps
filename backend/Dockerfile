@@ -14,10 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
-RUN pip install --upgrade pip && pip install -e ".[ai]"
-
+# Source first, then install. An editable install has to be able to find the
+# `app` package at install time — with only pyproject.toml present, setuptools
+# discovers nothing and the import fails at runtime instead of at build.
 COPY . .
+
+# `.[ai]` was removed: pydantic-ai-slim[google] is a plain dependency now, and
+# pip warned-and-skipped the non-existent extra rather than failing loudly.
+RUN pip install --upgrade pip && pip install -e .
 
 EXPOSE 8000
 
