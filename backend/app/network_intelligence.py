@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # Matches the SDK's own default environment,
 # https://network-as-code.p-eu.rapidapi.com
-DEFAULT_RAPIDAPI_HOST = "network-as-code.p-eu.rapidapi.com"
+DEFAULT_RAPIDAPI_HOST = "network-as-code.nokia.rapidapi.com"
 
 class ReachabilityStatus(StrEnum):
     """CAMARA device reachability values."""
@@ -111,12 +111,23 @@ class NetworkIntelligence(Protocol):
 # network inventory and would be far larger; here it is a small, fixed set of
 # simulator numbers of the kind Nokia's sandbox issues.
 SITE_DEVICES: dict[str, list[str]] = {
-    "RUH-104": ["+966500000101", "+966500000102", "+966500000103"],
-    "RUH-207": ["+966500000201", "+966500000202"],
-    "RUH-315": ["+966500000301", "+966500000302", "+966500000303"],
-    "JED-031": ["+966500000401"],
-    "JED-118": ["+966500000501", "+966500000502"],
-    "DMM-052": ["+966500000601", "+966500000602"],
+    # Real devices in Nokia's Network as Code simulator, verified live.
+    #
+    # The simulator holds two fixed populations: numbers in the +36371234xx
+    # range always answer `reachable: false`, and +367012345x always answer
+    # `reachable: true` with SMS and DATA. Neither can be flipped from here,
+    # so a site's story is told by which devices are registered against it.
+    #
+    # Sites carrying a real fault are given unreachable devices, so the agent
+    # can confirm subscriber impact. JED-031 — whose incident is resolved — is
+    # given reachable ones, so the agent can contradict a stale alarm. That
+    # contradiction is the point of consulting the network at all.
+    "RUH-104": ["+3637123456", "+3637123457", "+3637123458"],
+    "RUH-207": ["+3637123459", "+3637123450"],
+    "RUH-315": ["+3637123451", "+3637123452", "+3637123453"],
+    "JED-031": ["+3670123456"],
+    "JED-118": ["+3670123457", "+3670123458"],
+    "DMM-052": ["+3670123450", "+3670123451"],
 }
 
 

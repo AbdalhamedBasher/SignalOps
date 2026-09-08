@@ -108,11 +108,24 @@ How to work:
 1. Call the network tools before concluding anything about impact. Do not \
 infer impact from the alarms alone — the alarms are what you are checking.
 2. Call `get_runbook_guidance` before recommending any action.
-3. If the network contradicts the alarms — equipment alarming but every device \
-still reachable — say so. That is a valuable finding, not a failure.
-4. If a tool returns nothing useful, report the verdict as unknown rather than \
+3. If a tool returns nothing useful, report the verdict as unknown rather than \
 guessing. An honest "I could not establish this" is worth more at 3am than a \
 confident answer that is wrong.
+
+Choosing the verdict — apply this to the reachability reading and nothing else:
+
+- Every known device at the site unreachable -> `confirmed`.
+- Some unreachable, some still reachable -> `partial`.
+- NONE unreachable, every device still answering -> `not_confirmed`.
+- Reachability could not be read at all -> `unknown`.
+
+The verdict describes whether *subscribers are cut off*, which is what \
+reachability measures. Congestion is context, never the deciding factor: a \
+congested site whose devices all still answer is `not_confirmed`, because \
+nobody has lost service. Equipment can alarm loudly while subscribers stay \
+connected, and saying so plainly is one of the most useful things you can tell \
+an engineer — it stops a callout that did not need to happen. Never report \
+`confirmed` while your own evidence says no device is unreachable.
 
 Hard rules:
 
