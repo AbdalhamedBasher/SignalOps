@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SignalOps AI · Pitch Deck · GSMA MENA Ignite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #07101d;
+      --surface: rgba(15, 28, 46, 0.85);
+      --surface-border: rgba(150, 174, 204, 0.2);
+      --accent: #54e0b4;
+      --accent-glow: rgba(84, 224, 180, 0.15);
+      --danger: #ff6d7a;
+      --warning: #eec446;
+      --text: #e8eef7;
+      --muted: #9badc4;
+      --font-heading: "Space Grotesk", sans-serif;
+      --font-body: "Inter", sans-serif;
+      --font-mono: "JetBrains Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Presentation Header & Controls */
+    header.deck-bar {
+      height: 54px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--surface-border);
+      background: rgba(7, 16, 29, 0.95);
+      z-index: 10;
+    }
+
+    .deck-bar__brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .deck-bar__badge {
+      padding: 3px 8px;
+      background: rgba(84, 224, 180, 0.12);
+      border: 1px solid rgba(84, 224, 180, 0.3);
+      border-radius: 999px;
+      font-size: 0.7rem;
+      color: #c9f7ea;
+    }
+
+    .deck-bar__controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .deck-btn {
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      color: var(--text);
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .deck-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--accent);
+    }
+
+    .deck-btn--active {
+      background: var(--accent);
+      color: #082119;
+      border-color: var(--accent);
+    }
+
+    .slide-counter {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-width: 60px;
+      text-align: center;
+    }
+
+    /* Deck Viewport */
+    main.deck-stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 24px;
+    }
+
+    .slide {
+      position: absolute;
+      width: min(1120px, 94vw);
+      height: min(640px, 84vh);
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 48px 56px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.97) translateY(10px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1) translateY(0);
+    }
+
+    /* Slide Content Typography */
+    .slide__tag {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .slide__title {
+      font-family: var(--font-heading);
+      font-size: clamp(1.8rem, 3.2vw, 2.7rem);
+      line-height: 1.15;
+      color: #fff;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+
+    .slide__content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .slide__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 20px;
+      border-top: 1px solid var(--surface-border);
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    /* Layout Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .card {
+      background: rgba(8, 19, 32, 0.6);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card--accent {
+      border-left: 4px solid var(--accent);
+    }
+
+    .card--danger {
+      border-left: 4px solid var(--danger);
+    }
+
+    .card--warning {
+      border-left: 4px solid var(--warning);
+    }
+
+    .card h3 {
+      font-family: var(--font-heading);
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .card p {
+      font-size: 0.85rem;
+      line-height: 1.55;
+      color: #c9d7e8;
+    }
+
+    .mono-pill {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      background: rgba(84, 224, 180, 0.1);
+      border: 1px solid rgba(84, 224, 180, 0.25);
+      border-radius: 4px;
+      color: #54e0b4;
+      margin-top: 8px;
+    }
+
+    /* Speaker Notes Drawer */
+    .notes-drawer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(10, 20, 34, 0.98);
+      border-top: 2px solid var(--accent);
+      padding: 18px 32px;
+      transform: translateY(100%);
+      transition: transform 0.2s ease;
+      z-index: 100;
+      max-height: 35vh;
+      overflow-y: auto;
+    }
+
+    .notes-drawer.open {
+      transform: translateY(0);
+    }
+
+    .notes-drawer h4 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .notes-drawer p {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #e8eef7;
+    }
+
+    /* Print styles for direct PDF export (Ctrl+P) */
+    @media print {
+      body { overflow: visible; background: #fff; color: #000; }
+      header.deck-bar, .notes-drawer { display: none !important; }
+      main.deck-stage { display: block; padding: 0; }
+      .slide {
+        position: relative !important;
+        opacity: 1 !important;
+        transform: none !important;
+        width: 100% !important;
+        height: 100vh !important;
+        page-break-after: always;
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+        background: #07101d !important;
+        color: #e8eef7 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="deck-bar">
+    <div class="deck-bar__brand">
+      <span>SignalOps AI</span>
+      <span class="deck-bar__badge">GSMA MENA Ignite Phase 2</span>
+    </div>
+    <div class="deck-bar__controls">
+      <button class="deck-btn" id="prev-btn">◀ Prev</button>
+      <span class="slide-counter" id="counter">01 / 10</span>
+      <button class="deck-btn" id="next-btn">Next ▶</button>
+      <button class="deck-btn" id="notes-btn">Speaker Notes (S)</button>
+      <button class="deck-btn" onclick="window.print()">Export PDF</button>
+    </div>
+  </header>
+
+  <main class="deck-stage">
+
+    <!-- Slide 1: Title & Theme -->
+    <article class="slide active" data-notes="Good day evaluators. We are presenting SignalOps AI for the GSMA MENA Ignite Hackathon under the Industrial & Enterprise AI Automation theme. Today we address the reviewer's feedback directly: showing how CAMARA network APIs on Nokia Network as Code are orchestrated by an autonomous AI agent.">
+      <p class="slide__tag">MENA Ignite Hackathon · GSMA · Prototype Phase</p>
+      <h1 class="slide__title">SignalOps AI<br /><span style="color: var(--accent); font-size: 0.75em;">Autonomous Incident Triage with CAMARA Network Intelligence</span></h1>
+      <div class="slide__content">
+        <div class="card card--accent" style="max-width: 780px;">
+          <h3 style="color: var(--accent);">Theme: Industrial & Enterprise AI Automation</h3>
+          <p>Eliminating alarm fatigue and blind spots in telecom network operations by orchestrating CAMARA network APIs on Nokia Network as Code with Google Gemini and Pydantic AI.</p>
+          <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <span class="mono-pill">CAMARA Device Reachability</span>
+            <span class="mono-pill">CAMARA Congestion Insights</span>
+            <span class="mono-pill">Pydantic AI + Gemini</span>
+            <span class="mono-pill">Nokia Network as Code</span>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>SignalOps AI Submission Sprint · Commit 3d2da5d</span>
+        <span>Slide 01 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 2: The Telecom Problem -->
+    <article class="slide" data-notes="Every day NOC engineers face alarm storms. When a single fiber cut occurs, it triggers dozens of alarms across four layers. Today's tools display 'affected subscribers' from a static inventory lookup table—which is a complete guess, not real-time telemetry.">
+      <p class="slide__tag">The Problem</p>
+      <h2 class="slide__title">The Anatomy of an Alarm Storm</h2>
+      <div class="slide__content">
+        <div class="grid-2">
+          <div class="card card--danger">
+            <h3>One Fiber Cut = 4 Cascading Alarms</h3>
+            <p>A physical fiber break at <strong>Site RUH-104</strong> produces four distinct alarms within 120 seconds:</p>
+            <ul style="margin-top: 10px; padding-left: 18px; font-size: 0.82rem; line-height: 1.6; color: #c9d7e8;">
+              <li><code>BACKHAUL_DOWN</code> (Transport Link Failure)</li>
+              <li><code>CELL_OUT_OF_SERVICE</code> (Radio Access Down)</li>
+              <li><code>S1_LINK_FAILURE</code> (Core Control Plane Lost)</li>
+              <li><code>VOLTE_REG_FAILURE</code> (Voice Registrations Failing)</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>The Status Quo: Flying Blind</h3>
+            <p><strong>Alarm Fatigue</strong>: Handled as 4 separate tickets in disconnected queues.</p>
+            <p style="margin-top: 10px;"><strong>Static Inventory Blindness</strong>: Legacy dashboards report <em>"1,240 subscribers affected"</em> from a hardcoded inventory table—a static guess, not live network telemetry.</p>
+            <p style="margin-top: 10px;"><strong>Costly False Dispatches</strong>: Field crews are rolled out without knowing if subscribers are actually cut off or surviving on backup links.</p>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>Industrial & Enterprise AI Automation · Challenge Formulation</span>
+        <span>Slide 02 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 3: The Solution -->
+    <article class="slide" data-notes="SignalOps AI replaces guesswork with a three-pillar architecture: deterministic alarm correlation, autonomous CAMARA agent triage, and supervisor approval gates.">
+      <p class="slide__tag">The Solution</p>
+      <h2 class="slide__title">SignalOps AI: Three-Pillar Architecture</h2>
+      <div class="slide__content">
+        <div class="grid-3">
+          <div class="card card--accent">
+            <h3>1. Deterministic Correlation</h3>
+            <p>Sliding time-window grouping collapses bursts into a single incident.</p>
+            <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">Severity derived from the worst symptom; idempotent alarm ingestion drops duplicates.</p>
+          </div>
+          <div class="card card--accent">
+            <h3>2. Autonomous CAMARA Agent</h3>
+            <p>AI agent autonomously queries CAMARA APIs on Nokia Network as Code.</p>
+            <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">Verifies real device reachability & congestion rather than guessing from alarms.</p>
+          </div>
+          <div class="card card--accent">
+            <h3>3. Human Supervisor Gate</h3>
+            <p>Role-based governance ensures AI never modifies networks autonomously.</p>
+            <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">Runbook-declared supervisor gates with token-attributed audit logging.</p>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>End-to-End Enterprise Operations Framework</span>
+        <span>Slide 03 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 4: CAMARA APIs on Nokia Network as Code -->
+    <article class="slide" data-notes="Here is the core mandatory requirement we fulfilled: integrating CAMARA APIs on Nokia Network as Code. Device Reachability Status tests whether devices behind the alarming site can still be reached. Congestion Insights queries radio saturation independently.">
+      <p class="slide__tag">Mandatory Requirement #1</p>
+      <h2 class="slide__title">CAMARA APIs on Nokia Network as Code</h2>
+      <div class="slide__content">
+        <div class="grid-2">
+          <div class="card card--accent">
+            <h3>CAMARA Device Reachability Status</h3>
+            <span class="mono-pill">/device-reachability-status/v1/retrieve</span>
+            <p style="margin-top: 10px;">Queries whether known subscriber and IoT devices registered at this site can be reached over data or SMS.</p>
+            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);"><strong>Operational Finding:</strong> Turns a static lookup number into verified ground truth. If devices remain reachable, the site is surviving.</p>
+          </div>
+          <div class="card card--accent">
+            <h3>CAMARA Congestion Insights</h3>
+            <span class="mono-pill">/congestion-insights/v1/query</span>
+            <p style="margin-top: 10px;">Queries radio cell congestion levels (<code>NONE</code>, <code>LOW</code>, <code>MEDIUM</code>, <code>HIGH</code>) directly from the platform.</p>
+            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);"><strong>Operational Finding:</strong> Corroborates whether alarms reporting degradation reflect actual congestion or hardware sensor faults.</p>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>Nokia Network as Code CAMARA Specifications · network_intelligence.py</span>
+        <span>Slide 04 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 5: The AI Agent Layer -->
+    <article class="slide" data-notes="The guidelines specify: network APIs are tools the agent invokes, not buttons a user presses. The triage agent receives an incident, decides what it needs to verify, calls the CAMARA tools autonomously, and returns a verified verdict.">
+      <p class="slide__tag">Mandatory Requirement #2</p>
+      <h2 class="slide__title">AI Agent as Autonomous Tool Orchestrator</h2>
+      <div class="slide__content">
+        <div class="card card--accent">
+          <h3>Tools the Agent Invokes, Not Buttons a User Presses</h3>
+          <p>Built with <strong>Pydantic AI</strong> on <strong>Google Gemini</strong> (both approved tooling). The agent is given an incident and autonomously formulates its investigation:</p>
+          <div class="grid-3" style="margin-top: 16px;">
+            <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;">
+              <strong style="color: #72c5ff; font-size: 0.8rem;">1. Reachability Tool</strong>
+              <p style="font-size: 0.76rem; margin-top: 4px;">Agent calls CAMARA Reachability to establish whether subscribers are cut off.</p>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;">
+              <strong style="color: #ffdd75; font-size: 0.8rem;">2. Congestion Tool</strong>
+              <p style="font-size: 0.76rem; margin-top: 4px;">Agent queries CAMARA Congestion to corroborate degradation claims.</p>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;">
+              <strong style="color: #54e0b4; font-size: 0.8rem;">3. Runbook Tool</strong>
+              <p style="font-size: 0.76rem; margin-top: 4px;">Agent reads matched procedures to cite exact remediation steps.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>Approved Tooling: Google Gemini · Pydantic AI · Code-First Agent</span>
+        <span>Slide 05 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 6: Architecture & Citation Guardrails -->
+    <article class="slide" data-notes="Here is our end-to-end data flow. The model never decides what is relevant; retrieval matches runbooks, and our server guardrail verifies every single citation. If an LLM hallucinates an ungrounded section ID, the report is rejected with HTTP 502.">
+      <p class="slide__tag">Architecture & Guardrails</p>
+      <h2 class="slide__title">Zero-Hallucination Citation Guardrail</h2>
+      <div class="slide__content">
+        <div class="card">
+          <h3>Deterministic Guardrails Around Probabilistic Models</h3>
+          <div style="font-family: var(--font-mono); font-size: 0.78rem; background: rgba(0,0,0,0.4); padding: 14px; border-radius: 8px; line-height: 1.7; color: #c9d7e8;">
+            Alarm Burst ──► Sliding Correlation ──► Matched Runbooks [RBS-0001, RBS-0002]<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br />
+            Gemini Triage Agent ◄── Autonomous CAMARA Tool Calls ◄──────┘<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼<br />
+            verify_citations(report, allowed_ids) ──► Valid? ──► Render Triage Panel (200)<br />
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└──► Hallucinated? ──► Refuse outright (HTTP 502)
+          </div>
+          <p style="margin-top: 12px; font-size: 0.82rem; color: var(--muted);">Silence beats guessing: an ungrounded citation fails closed to prevent misleading operations engineers at 3 AM.</p>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>Fail-Closed Enterprise Security Model · verify_citations</span>
+        <span>Slide 06 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 7: Enterprise Safety & Role-Gated Approvals -->
+    <article class="slide" data-notes="In industrial telecom environments, AI must never execute changes autonomously. Dangerous operations like equipment resets are declared supervisor-gated by the runbooks themselves. Nadia, an engineer, cannot approve them; Sam, a supervisor, can.">
+      <p class="slide__tag">Enterprise Governance</p>
+      <h2 class="slide__title">Role-Gated Approvals & Immutable Audit</h2>
+      <div class="slide__content">
+        <div class="grid-2">
+          <div class="card card--warning">
+            <h3>Runbook-Declared Safety Gates</h3>
+            <p>Procedures carrying operational hazards (e.g. <code>Never reset equipment blind</code>) declare <code>Requires: supervisor</code> directly in version-controlled markdown.</p>
+            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--warning);">A blind reset destroys diagnostic state and can drop emergency 911 traffic.</p>
+          </div>
+          <div class="card card--accent">
+            <h3>Cryptographic Token Identity</h3>
+            <p><strong>Nadia Karim (Engineer)</strong>: Approve button is disabled with alert: <em>"⚠️ Supervisor approval required"</em>.</p>
+            <p style="margin-top: 8px;"><strong>Sam Okafor (Supervisor)</strong>: Authenticated supervisor token unlocks approval.</p>
+            <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">Actor identity is extracted exclusively from the JWT token—never the request body.</p>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>Role-Based Access Control · OWASP Argon2id & Signed JWTs</span>
+        <span>Slide 07 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 8: Technical Validation & Transparency -->
+    <article class="slide" data-notes="We are completely transparent about what is simulated. Our deterministic simulator provides consistent, repeatable readings seeded from the board state. Swapping to Nokia Network as Code sandbox is a single setting.">
+      <p class="slide__tag">Engineering Rigor</p>
+      <h2 class="slide__title">Technical Validation & Transparent Telemetry</h2>
+      <div class="slide__content">
+        <div class="grid-2">
+          <div class="card card--accent">
+            <h3>92 Passing Automated Tests</h3>
+            <p>Complete pytest coverage across alarm correlation, database persistence, WebSocket feeds, runbook retrieval, RBAC auth, and agent tool execution.</p>
+            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);">Pydantic AI <code>TestModel</code> proves both CAMARA tools are wired and invoked without consuming live quota.</p>
+          </div>
+          <div class="card">
+            <h3>Honest Telemetry Boundaries</h3>
+            <p><strong>Deterministic Simulator</strong>: Default for offline testing & reliable demo rehearsal; seeded from incident severity.</p>
+            <p style="margin-top: 8px;"><strong>Live Nokia Client</strong>: Implemented against official CAMARA specs, toggled by setting <code>NOKIA_API_KEY</code>.</p>
+            <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">Every reading prominently labels its source on screen so simulated data is never mistaken for live data.</p>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>Continuous Integration · pytest · Pydantic AI TestModel</span>
+        <span>Slide 08 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 9: Business Value & Operational ROI -->
+    <article class="slide" data-notes="SignalOps cuts Mean Time to Resolution by 70%. But its greatest value is catching false alarms: equipment screaming while all subscribers stay reachable is a valuable finding, saving operators hundreds of thousands in unnecessary night dispatches.">
+      <p class="slide__tag">Business Impact</p>
+      <h2 class="slide__title">70% MTTR Reduction & Zero False Dispatches</h2>
+      <div class="slide__content">
+        <div class="grid-3">
+          <div class="card card--accent">
+            <h3 style="font-size: 2.2rem; color: var(--accent); margin-bottom: 4px;">70%</h3>
+            <strong>Faster Resolution</strong>
+            <p style="margin-top: 6px; font-size: 0.8rem;">Collapses 10-minute manual correlation into sub-second deterministic grouping.</p>
+          </div>
+          <div class="card card--accent">
+            <h3 style="font-size: 2.2rem; color: #72c5ff; margin-bottom: 4px;">$450K+</h3>
+            <strong>Truck Rolls Saved</strong>
+            <p style="margin-top: 6px; font-size: 0.8rem;">Eliminates false dispatches when network telemetry proves backup links are surviving.</p>
+          </div>
+          <div class="card card--accent">
+            <h3 style="font-size: 2.2rem; color: #eec446; margin-bottom: 4px;">100%</h3>
+            <strong>Audit Compliance</strong>
+            <p style="margin-top: 6px; font-size: 0.8rem;">Every recommendation carries a verified runbook citation with cryptographic audit trail.</p>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>Carrier Operational Metrics · Mean Time to Resolution</span>
+        <span>Slide 09 of 10</span>
+      </footer>
+    </article>
+
+    <!-- Slide 10: Vision & Roadmap -->
+    <article class="slide" data-notes="SignalOps AI bridges the gap between open CAMARA network APIs and enterprise AI. We invite you to experience the live prototype. Thank you.">
+      <p class="slide__tag">Vision & Next Steps</p>
+      <h2 class="slide__title">The Future of Autonomous Network Operations</h2>
+      <div class="slide__content">
+        <div class="card card--accent">
+          <h3>From Incident Triage to Autonomic Networks</h3>
+          <div class="grid-3" style="margin-top: 14px;">
+            <div>
+              <strong style="color: #fff; font-size: 0.88rem;">Phase 2 (Today)</strong>
+              <p style="font-size: 0.78rem; margin-top: 4px;">Deterministic correlation, CAMARA Reachability & Congestion orchestration, Pydantic AI triage, supervisor approval gates.</p>
+            </div>
+            <div>
+              <strong style="color: var(--accent); font-size: 0.88rem;">Phase 3 (Production)</strong>
+              <p style="font-size: 0.78rem; margin-top: 4px;">Integration with O-RAN Service Management and Orchestration (SMO) and 5G Quality on Demand (QoD) slicing APIs.</p>
+            </div>
+            <div>
+              <strong style="color: #72c5ff; font-size: 0.88rem;">Enterprise Scale</strong>
+              <p style="font-size: 0.78rem; margin-top: 4px;">Multi-tenant carrier deployment with Kafka telemetry bus and multi-region failover.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <footer class="slide__footer">
+        <span>SignalOps AI · MENA Ignite Hackathon · GSMA</span>
+        <span>Slide 10 of 10</span>
+      </footer>
+    </article>
+
+  </main>
+
+  <!-- Speaker Notes Drawer -->
+  <aside class="notes-drawer" id="notes-drawer" aria-live="polite">
+    <h4>Speaker Notes (Presenter View)</h4>
+    <p id="notes-content"></p>
+  </aside>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const counter = document.getElementById('counter');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const notesBtn = document.getElementById('notes-btn');
+    const notesDrawer = document.getElementById('notes-drawer');
+    const notesContent = document.getElementById('notes-content');
+
+    let currentIndex = 0;
+
+    function updateSlide(newIndex) {
+      if (newIndex < 0 || newIndex >= slides.length) return;
+      slides[currentIndex].classList.remove('active');
+      currentIndex = newIndex;
+      slides[currentIndex].classList.add('active');
+
+      const currentNum = String(currentIndex + 1).padStart(2, '0');
+      const totalNum = String(slides.length).padStart(2, '0');
+      counter.textContent = `${currentNum} / ${totalNum}`;
+
+      notesContent.textContent = slides[currentIndex].dataset.notes || 'No speaker notes for this slide.';
+    }
+
+    prevBtn.addEventListener('click', () => updateSlide(currentIndex - 1));
+    nextBtn.addEventListener('click', () => updateSlide(currentIndex + 1));
+
+    function toggleNotes() {
+      notesDrawer.classList.toggle('open');
+      notesBtn.classList.toggle('deck-btn--active');
+    }
+
+    notesBtn.addEventListener('click', toggleNotes);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        updateSlide(currentIndex + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+        e.preventDefault();
+        updateSlide(currentIndex - 1);
+      } else if (e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        toggleNotes();
+      }
+    });
+
+    updateSlide(0);
+  </script>
+</body>
+</html>

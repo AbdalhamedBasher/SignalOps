@@ -20,7 +20,11 @@ config = context.config
 # override still wins, which is how the migration test points at a scratch
 # database without touching the developer's own.
 if not config.get_main_option("sqlalchemy.url", ""):
-    config.set_main_option("sqlalchemy.url", get_settings().database_url)
+    # The *normalized* URL, exactly as the application engine uses. Render and
+    # Railway inject `postgres://`, which SQLAlchemy 2.0 no longer accepts —
+    # and migrations run before the app starts, so getting this wrong here
+    # fails the deploy before anything else has a chance to.
+    config.set_main_option("sqlalchemy.url", get_settings().normalized_database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -29,7 +33,7 @@ target_metadata = Base.metadata
 
 
 def _is_sqlite() -> bool:
-    return get_settings().database_url.startswith("sqlite")
+    return get_settings().is_sqlite
 
 
 def render_item(type_: str, obj: object, autogen_context: object) -> str | bool:

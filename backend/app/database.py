@@ -62,12 +62,16 @@ class UtcDateTime(TypeDecorator[datetime]):
 def build_engine(database_url: str) -> Engine:
     settings_is_sqlite = database_url.startswith("sqlite")
 
-    engine = create_engine(
-        database_url,
-        # FastAPI runs synchronous handlers across a thread pool, and SQLite
-        # otherwise refuses to reuse a connection on a different thread.
-        connect_args={"check_same_thread": False} if settings_is_sqlite else {},
-    )
+    # WHY: pool_pre_ping=True tests connection liveness before checkout, preventing
+    # 500 errors on Render/Railway when idle database connections are dropped by the firewall.
+    engine_kwargs: dict[str, Any] = {}
+    if settings_is_sqlite:
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+    else:
+        engine_kwargs["pool_pre_ping"] = True
+        engine_kwargs["pool_recycle"] = 300
+
+    engine = create_engine(database_url, **engine_kwargs)
 
     if settings_is_sqlite:
         # SQLite ignores foreign keys unless asked, per connection. Without
@@ -82,7 +86,8 @@ def build_engine(database_url: str) -> Engine:
     return engine
 
 
-engine = build_engine(get_settings().database_url)
+engine = build_engine(get_settings().normalized_database_url)
+
 
 SessionFactory = sessionmaker(
     bind=engine,

@@ -14,6 +14,9 @@ export type RunbookSection = {
   anchor: string;
   body: string;
   applies_to: string[];
+  // WHY: Certain runbook procedures (e.g. destructive resets) require supervisor
+  // authorization declared in the runbook markdown itself (Requires: supervisor).
+  requires_supervisor?: boolean;
 };
 
 export type Recommendation = {
@@ -28,6 +31,53 @@ export type Recommendation = {
   modified_steps: string | null;
 };
 
+export const impactVerdicts = [
+  "confirmed",
+  "partial",
+  "not_confirmed",
+  "unknown",
+] as const;
+
+export type ImpactVerdict = (typeof impactVerdicts)[number];
+
+export type StoredTriage = {
+  id: string;
+  incident_id: string;
+  verdict: ImpactVerdict;
+  summary: string;
+  evidence: string[];
+  first_actions: string[];
+  cited_section_ids: string[];
+  gaps: string | null;
+  model: string;
+  trace: string[];
+  generated_at: string;
+};
+
+export function isStoredTriage(value: unknown): value is StoredTriage {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.incident_id === "string" &&
+    typeof value.verdict === "string" &&
+    impactVerdicts.includes(value.verdict as ImpactVerdict) &&
+    typeof value.summary === "string" &&
+    isStringArray(value.evidence) &&
+    isStringArray(value.first_actions) &&
+    // WHY: Citations are what make agent-generated triage verifiable against
+    // approved runbooks; an invalid citation list indicates a compromised response.
+    isStringArray(value.cited_section_ids) &&
+    isNullableString(value.gaps) &&
+    typeof value.model === "string" &&
+    isStringArray(value.trace) &&
+    typeof value.generated_at === "string"
+  );
+}
+
+// Deprecated legacy Briefing type preserved for backwards compatibility.
 export type Briefing = {
   id: string;
   incident_id: string;
@@ -49,8 +99,6 @@ export function isBriefing(value: unknown): value is Briefing {
     typeof value.incident_id === "string" &&
     typeof value.summary === "string" &&
     isStringArray(value.first_actions) &&
-    // Citations are what make generated text checkable, so a briefing whose
-    // citation list is the wrong shape is refused rather than displayed.
     isStringArray(value.cited_section_ids) &&
     isNullableString(value.gaps) &&
     typeof value.model === "string" &&
@@ -82,7 +130,9 @@ function isRunbookSection(value: unknown): value is RunbookSection {
     typeof value.heading === "string" &&
     typeof value.anchor === "string" &&
     typeof value.body === "string" &&
-    isStringArray(value.applies_to)
+    isStringArray(value.applies_to) &&
+    (value.requires_supervisor === undefined ||
+      typeof value.requires_supervisor === "boolean")
   );
 }
 
@@ -94,9 +144,6 @@ export function isRecommendation(value: unknown): value is Recommendation {
   return (
     typeof value.id === "string" &&
     typeof value.incident_id === "string" &&
-    // A recommendation without a valid citation is refused outright rather
-    // than rendered with a missing source. Unattributed guidance is exactly
-    // what this slice exists to prevent.
     isRunbookSection(value.section) &&
     typeof value.rationale === "string" &&
     isStringArray(value.matched_codes) &&

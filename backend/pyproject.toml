@@ -17,14 +17,13 @@ dependencies = [
   # Argon2id rather than bcrypt: it is the current OWASP recommendation and has
   # no silent 72-byte truncation to trip over.
   "argon2-cffi>=23.1,<26.0",
+  "psycopg[binary]>=3.1,<4.0",
+  # The slim distribution with only the Google provider. The `pydantic-ai`
+  # meta-package would also drag in the Anthropic and OpenAI SDKs, which this
+  # project deliberately does not use — the agent runs on Gemini.
+  "pydantic-ai-slim[google]>=2.0,<3.0",
 ]
 
-[project.optional-dependencies]
-# Only needed to generate briefings. The import is lazy and the feature is off
-# by default, so the application and its tests run without this installed.
-ai = [
-  "anthropic>=1.0,<2.0",
-]
 dev = [
   "httpx>=0.27,<1.0",
   "pytest>=8,<9",

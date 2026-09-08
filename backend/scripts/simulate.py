@@ -55,11 +55,39 @@ SCENARIOS: dict[str, tuple[SimulatedAlarm, ...]] = {
 }
 
 
-def post_alarm(api_url: str, payload: dict[str, str]) -> tuple[int, dict]:
+def authenticate_collector(
+    api_url: str,
+    username: str = "collector-01",
+    password: str = "collector-dev-password",
+) -> str | None:
+    """Log in with the seed collector credentials to obtain a Bearer token."""
+    request = urllib.request.Request(
+        f"{api_url}/api/auth/login",
+        data=json.dumps({"username": username, "password": password}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            body = json.load(response)
+            return body.get("access_token")
+    except Exception as error:
+        print(f"Warning: collector login failed ({error}); sending unauthenticated")
+        return None
+
+
+def post_alarm(
+    api_url: str, payload: dict[str, str], token: str | None = None
+) -> tuple[int, dict]:
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     request = urllib.request.Request(
         f"{api_url}/api/alarms",
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
 
@@ -70,7 +98,9 @@ def post_alarm(api_url: str, payload: dict[str, str]) -> tuple[int, dict]:
         return error.code, json.load(error)
 
 
+
 def run(api_url: str, site_id: str, scenario: str, *, retry_once: bool) -> None:
+    token = authenticate_collector(api_url)
     alarms = SCENARIOS[scenario]
     fault_start = datetime.now(UTC) - timedelta(seconds=alarms[-1].offset_seconds)
 
@@ -92,7 +122,7 @@ def run(api_url: str, site_id: str, scenario: str, *, retry_once: bool) -> None:
         }
         last_payload = payload
 
-        status_code, body = post_alarm(api_url, payload)
+        status_code, body = post_alarm(api_url, payload, token=token)
 
         if status_code >= 400:
             print(f"  {simulated.code:<22} rejected ({status_code}): {body}")
@@ -107,12 +137,13 @@ def run(api_url: str, site_id: str, scenario: str, *, retry_once: bool) -> None:
         )
 
     if retry_once and last_payload is not None:
-        status_code, body = post_alarm(api_url, last_payload)
+        status_code, body = post_alarm(api_url, last_payload, token=token)
         print(
             f"\n  redelivering the last alarm -> HTTP {status_code}, "
             f"duplicate={body.get('duplicate')}, "
             f"{len(body['incident']['alarms'])} alarm(s) (unchanged)"
         )
+
 
     print("\nOpen the dashboard and reload to see the incident.")
 

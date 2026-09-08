@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { ensureAuthenticated, getStoredAuth } from "./api/auth";
 import { ConnectionIndicator } from "./components/ConnectionIndicator";
 import { IncidentCard } from "./components/IncidentCard";
 import { IncidentDetails } from "./components/IncidentDetails";
@@ -9,11 +10,54 @@ import {
   type StatusFilter,
 } from "./components/IncidentFilters";
 import { LiveEventFeed } from "./components/LiveEventFeed";
+import { OperatorSwitcher } from "./components/OperatorSwitcher";
 import { useIncidentBoard } from "./hooks/useIncidentBoard";
+import type { AuthenticatedUser } from "./types/auth";
 
 export default function App() {
+  const [currentOperator, setCurrentOperator] =
+    useState<AuthenticatedUser | null>(() => getStoredAuth()?.user ?? null);
+  const [authToken, setAuthToken] = useState<string | null>(
+    () => getStoredAuth()?.access_token ?? null,
+  );
+
+  useEffect(() => {
+    // WHY: Ensure an active authenticated session exists on app boot so the
+    // dashboard and websocket immediately load without a blocking login form.
+    //
+    // This runs on every mount, not only when no token is stored. A stored
+    // token is still a token even after it has expired or the API has been
+    // restarted with a new signing secret — and skipping the check in that
+    // case left the dashboard signed in with credentials nothing accepted:
+    // every request 401, the live feed rejected 403, and no way to recover
+    // except clearing site data by hand. `ensureAuthenticated` verifies the
+    // stored token and replaces it when the API no longer honours it.
+    let cancelled = false;
+
+    async function initAuth() {
+      try {
+        const auth = await ensureAuthenticated();
+
+        if (cancelled) {
+          return;
+        }
+
+        setCurrentOperator(auth.user);
+        setAuthToken(auth.access_token);
+      } catch (err) {
+        console.error("Auth initialization failed", err);
+      }
+    }
+
+    void initAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const { incidents, requestStatus, errorMessage, connection, feed } =
-    useIncidentBoard();
+    useIncidentBoard(authToken);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
@@ -61,6 +105,11 @@ export default function App() {
     setStatusFilter("all");
   }
 
+  function handleOperatorChange(operator: AuthenticatedUser) {
+    setCurrentOperator(operator);
+    setAuthToken(getStoredAuth()?.access_token ?? null);
+  }
+
   return (
     <div className="app-shell">
       <header className="hero">
@@ -68,11 +117,17 @@ export default function App() {
           <p className="eyebrow">Telecom network operations</p>
           <h1>SignalOps AI</h1>
           <p className="hero__summary">
-            Correlate network alarms, understand customer impact, and guide
+            Correlate network alarms, orchestrate CAMARA intelligence, and guide
             engineers toward faster incident resolution.
           </p>
         </div>
-        <ConnectionIndicator connection={connection} />
+        <div className="hero__controls">
+          <OperatorSwitcher
+            currentOperator={currentOperator}
+            onOperatorChange={handleOperatorChange}
+          />
+          <ConnectionIndicator connection={connection} />
+        </div>
       </header>
 
       <main>
@@ -164,6 +219,7 @@ export default function App() {
               {selectedIncident && (
                 <IncidentDetails
                   incident={selectedIncident}
+                  currentOperator={currentOperator}
                   onClose={() => setSelectedIncidentId(null)}
                 />
               )}

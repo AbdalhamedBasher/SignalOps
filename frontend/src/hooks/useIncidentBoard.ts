@@ -50,7 +50,7 @@ function upsert(incidents: Incident[], incoming: Incident): Incident[] {
   );
 }
 
-export function useIncidentBoard() {
+export function useIncidentBoard(authToken: string | null) {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [requestStatus, setRequestStatus] = useState<RequestStatus>("loading");
   const [errorMessage, setErrorMessage] = useState("");
@@ -58,6 +58,19 @@ export function useIncidentBoard() {
   const [feed, setFeed] = useState<FeedEntry[]>([]);
 
   useEffect(() => {
+    // WHY: In Slice 7, authentication is mandatory for both the HTTP snapshot
+    // and the WebSocket stream; we defer connection until a valid session token exists.
+    if (!authToken) {
+      setRequestStatus("loading");
+      setConnection("connecting");
+      return;
+    }
+
+    // Captured after the guard above. TypeScript does not carry a narrowing
+    // into a nested function, because the binding could in principle change
+    // before that function runs — so the non-null value is pinned here once.
+    const token = authToken;
+
     // React runs effects twice in development StrictMode. Without this flag the
     // torn-down first run would keep reconnecting in the background forever.
     let disposed = false;
@@ -79,7 +92,10 @@ export function useIncidentBoard() {
         setErrorMessage("");
         setRequestStatus("success");
       } catch (error) {
-        if (disposed || (error instanceof DOMException && error.name === "AbortError")) {
+        if (
+          disposed ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
           return;
         }
 
@@ -101,7 +117,10 @@ export function useIncidentBoard() {
       }
 
       setConnection("connecting");
-      socket = new WebSocket(INCIDENT_FEED_URL);
+      // WHY: Browsers cannot set custom headers during WebSocket handshake,
+      // so token travels as an authenticated URL query parameter validated by backend.
+      const socketUrl = `${INCIDENT_FEED_URL}?token=${encodeURIComponent(token)}`;
+      socket = new WebSocket(socketUrl);
 
       socket.onopen = () => {
         if (disposed) {
@@ -186,7 +205,7 @@ export function useIncidentBoard() {
         socket.close();
       }
     };
-  }, []);
+  }, [authToken]);
 
   return { incidents, requestStatus, errorMessage, connection, feed };
 }

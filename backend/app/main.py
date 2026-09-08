@@ -95,11 +95,12 @@ triage_service = build_triage_service(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=get_settings().parsed_cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 def get_repository(session: Session = Depends(get_session)) -> IncidentRepository:

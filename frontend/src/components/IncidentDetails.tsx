@@ -1,8 +1,10 @@
+import type { AuthenticatedUser } from "../types/auth";
 import type { Incident } from "../types/incident";
 import { RecommendationPanel } from "./RecommendationPanel";
 
 type IncidentDetailsProps = {
   incident: Incident;
+  currentOperator: AuthenticatedUser | null;
   onClose: () => void;
 };
 
@@ -17,7 +19,11 @@ const timeFormatter = new Intl.DateTimeFormat("en", {
   timeStyle: "medium",
 });
 
-export function IncidentDetails({ incident, onClose }: IncidentDetailsProps) {
+export function IncidentDetails({
+  incident,
+  currentOperator,
+  onClose,
+}: IncidentDetailsProps) {
   // Copy before sorting: `sort` mutates in place, and `incident.alarms` is
   // owned by App's state. Sorting it directly would mutate state behind React's
   // back. Not memoized on purpose — this list is small and only re-renders when
@@ -89,49 +95,49 @@ export function IncidentDetails({ incident, onClose }: IncidentDetailsProps) {
           </span>
         </div>
 
-        {/*
-          TODO(you): render an empty state when `incident.alarms.length === 0`.
-          Show something like "No alarms were correlated to this incident yet."
-          using the existing `.state-panel` class, and make sure the <ol> below
-          does not render in that case.
-          Hint: the four states this project cares about are loading, error,
-          empty, success — see rule 5 in the README. This is the empty one.
-        */}
-
-        <ol className="alarm-timeline__list">
-          {alarmsOldestFirst.map((alarm, index) => (
-            <li className="alarm-timeline__item" key={alarm.id}>
-              <span
-                className={`alarm-timeline__marker alarm-timeline__marker--${alarm.severity}`}
-                aria-hidden="true"
-              />
-              <div className="alarm-timeline__body">
-                <div className="alarm-timeline__topline">
-                  <code className="alarm-timeline__code">{alarm.code}</code>
-                  {/* The marker dot encodes severity as colour, which a screen
-                      reader cannot convey. This carries the same fact as text. */}
-                  <span className="visually-hidden">
-                    {alarm.severity} severity
-                  </span>
-                  {index === 0 && (
-                    <span className="alarm-timeline__badge">first signal</span>
-                  )}
+        {incident.alarms.length === 0 ? (
+          <div className="state-panel">
+            No alarms were correlated to this incident yet.
+          </div>
+        ) : (
+          <ol className="alarm-timeline__list">
+            {alarmsOldestFirst.map((alarm, index) => (
+              <li className="alarm-timeline__item" key={alarm.id}>
+                <span
+                  className={`alarm-timeline__marker alarm-timeline__marker--${alarm.severity}`}
+                  aria-hidden="true"
+                />
+                <div className="alarm-timeline__body">
+                  <div className="alarm-timeline__topline">
+                    <code className="alarm-timeline__code">{alarm.code}</code>
+                    {/* The marker dot encodes severity as colour, which a screen
+                        reader cannot convey. This carries the same fact as text. */}
+                    <span className="visually-hidden">
+                      {alarm.severity} severity
+                    </span>
+                    {index === 0 && (
+                      <span className="alarm-timeline__badge">first signal</span>
+                    )}
+                  </div>
+                  <p className="alarm-timeline__message">{alarm.message}</p>
+                  <time
+                    className="alarm-timeline__time"
+                    dateTime={alarm.occurred_at}
+                    title={dateFormatter.format(new Date(alarm.occurred_at))}
+                  >
+                    {timeFormatter.format(new Date(alarm.occurred_at))}
+                  </time>
                 </div>
-                <p className="alarm-timeline__message">{alarm.message}</p>
-                <time
-                  className="alarm-timeline__time"
-                  dateTime={alarm.occurred_at}
-                  title={dateFormatter.format(new Date(alarm.occurred_at))}
-                >
-                  {timeFormatter.format(new Date(alarm.occurred_at))}
-                </time>
-              </div>
-            </li>
-          ))}
-        </ol>
+              </li>
+            ))}
+          </ol>
+        )}
       </section>
 
-      <RecommendationPanel incidentId={incident.id} />
+      <RecommendationPanel
+        incidentId={incident.id}
+        currentOperator={currentOperator}
+      />
     </aside>
   );
 }
