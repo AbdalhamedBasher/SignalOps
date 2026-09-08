@@ -127,7 +127,8 @@ def get_network(
 
     if settings.nokia_api_key:
         return NokiaNetworkAsCode(
-            base_url=settings.nokia_base_url, api_key=settings.nokia_api_key
+            api_key=settings.nokia_api_key,
+            rapidapi_host=settings.nokia_rapidapi_host,
         )
 
     degraded = {

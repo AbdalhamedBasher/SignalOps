@@ -29,9 +29,9 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-CAMARA_REACHABILITY_PATH = "/device-reachability-status/v1/retrieve"
-CAMARA_CONGESTION_PATH = "/congestion-insights/v1/query"
-
+# Matches the SDK's own default environment,
+# https://network-as-code.p-eu.rapidapi.com
+DEFAULT_RAPIDAPI_HOST = "network-as-code.p-eu.rapidapi.com"
 
 class ReachabilityStatus(StrEnum):
     """CAMARA device reachability values."""
@@ -207,23 +207,32 @@ class SimulatedNetwork:
 
 class NokiaNetworkAsCode:
     """
-    The live client against Nokia's Network as Code CAMARA endpoints.
+    The live client, built on Nokia's own `network-as-code` SDK.
 
-    NOT YET VERIFIED against the real platform — see docs/MVP.md. It is written
-    to the CAMARA specifications and will need checking against a real sandbox
-    account before it can be claimed to work.
+    Written against the SDK's published surface rather than hand-rolled HTTP,
+    because a first attempt at guessing the CAMARA paths got both of them
+    wrong: reachability lives under `device-status/`, and congestion is v0, not
+    v1. The vendor's client already knows all of that, and it carries the
+    RapidAPI authentication these endpoints sit behind.
+
+    Two APIs are used, both synchronous:
+
+    - `device_status.retrieve_reachability_status` -> `reachable` plus the
+      connectivity kinds (DATA, SMS) currently available to the device.
+    - `congestion_insights.query` -> congestion over a time window. This one is
+      per *device*, not per site, so the site's first registered device stands
+      in for the cell.
+
+    Still unverified against a live account: the shapes below come from the
+    SDK's own types, but nothing here has met the real network.
     """
 
-    def __init__(self, *, base_url: str, api_key: str, timeout: float = 10.0) -> None:
-        import httpx  # noqa: PLC0415
+    def __init__(self, *, api_key: str, rapidapi_host: str | None = None) -> None:
+        from network_as_code import NetworkAsCodeApi  # noqa: PLC0415
 
-        self._client = httpx.Client(
-            base_url=base_url.rstrip("/"),
-            timeout=timeout,
-            headers={
-                "X-API-Key": api_key,
-                "Content-Type": "application/json",
-            },
+        self._client = NetworkAsCodeApi(
+            api_key=api_key,
+            rapidapi_host=rapidapi_host or DEFAULT_RAPIDAPI_HOST,
         )
 
     def device_reachability(self, site_id: str) -> SiteReachability:
@@ -248,36 +257,47 @@ class NokiaNetworkAsCode:
 
     def _reachability_of(self, device_id: str) -> ReachabilityStatus:
         try:
-            response = self._client.post(
-                CAMARA_REACHABILITY_PATH,
-                json={"device": {"phoneNumber": device_id}},
+            result = self._client.device_status.retrieve_reachability_status(
+                device={"phone_number": device_id}
             )
-            response.raise_for_status()
-            payload = response.json()
         except Exception:
-            # One unreachable API must not stop the triage. Reporting UNKNOWN
-            # lets the agent say "I could not establish this" instead of
-            # inventing a reading.
+            # One unreachable API must not stop the triage. UNKNOWN lets the
+            # agent say "I could not establish this" instead of inventing a
+            # reading, which is the whole point of the verdict having an
+            # `unknown` value.
             logger.exception("Reachability lookup failed for %s", device_id)
 
             return ReachabilityStatus.UNKNOWN
 
-        raw = payload.get("reachabilityStatus") or payload.get("status")
+        if not getattr(result, "reachable", False):
+            return ReachabilityStatus.NOT_CONNECTED
 
-        try:
-            return ReachabilityStatus(raw)
-        except ValueError:
-            return ReachabilityStatus.UNKNOWN
+        connectivity = [str(item) for item in (getattr(result, "connectivity", None) or [])]
+
+        # A device reachable only by SMS has lost data service, which for a
+        # subscriber means the site is not carrying their traffic.
+        if "DATA" in connectivity or not connectivity:
+            return ReachabilityStatus.CONNECTED_DATA
+
+        return ReachabilityStatus.CONNECTED_SMS
 
     def congestion(self, site_id: str) -> CongestionInsight:
         now = datetime.now(UTC)
+        devices = devices_at(site_id)
+
+        if not devices:
+            return CongestionInsight(
+                site_id=site_id,
+                level=CongestionLevel.UNKNOWN,
+                detail=f"No device is registered at {site_id} to query congestion for.",
+                source=DataSource.NOKIA_NETWORK_AS_CODE,
+                checked_at=now,
+            )
 
         try:
-            response = self._client.post(
-                CAMARA_CONGESTION_PATH, json={"area": {"siteId": site_id}}
+            insights = self._client.congestion_insights.query(
+                device={"phone_number": devices[0]}
             )
-            response.raise_for_status()
-            payload = response.json()
         except Exception:
             logger.exception("Congestion lookup failed for %s", site_id)
 
@@ -289,17 +309,35 @@ class NokiaNetworkAsCode:
                 checked_at=now,
             )
 
-        raw = str(payload.get("congestionLevel", "")).lower()
+        if not insights:
+            return CongestionInsight(
+                site_id=site_id,
+                level=CongestionLevel.UNKNOWN,
+                detail=f"The network returned no congestion data for {site_id}.",
+                source=DataSource.NOKIA_NETWORK_AS_CODE,
+                checked_at=now,
+            )
+
+        # The API returns a series over time; the most recent window is what an
+        # engineer looking at a live incident cares about.
+        latest = insights[-1]
+        raw = str(getattr(latest, "congestion_level", "") or "").lower()
 
         try:
             level = CongestionLevel(raw)
         except ValueError:
             level = CongestionLevel.UNKNOWN
 
+        confidence = getattr(latest, "confidence_level", None)
+        confidence_note = f" (confidence {confidence}%)" if confidence is not None else ""
+
         return CongestionInsight(
             site_id=site_id,
             level=level,
-            detail=str(payload.get("description", "")) or f"Congestion at {site_id}.",
+            detail=(
+                f"Congestion reported as {raw or 'unknown'} for the device "
+                f"standing in for {site_id}{confidence_note}."
+            ),
             source=DataSource.NOKIA_NETWORK_AS_CODE,
             checked_at=now,
         )

@@ -40,7 +40,9 @@ class Settings(BaseSettings):
     # deterministic simulator, which is what Nokia recommends for development
     # and what keeps a demo alive when the network is not reachable.
     nokia_api_key: str | None = None
-    nokia_base_url: str = "https://network-as-code.p-eu.rapidapi.com"
+    # The RapidAPI host the Network as Code SDK routes through. Only needs
+    # changing if Nokia issues a key for a different region.
+    nokia_rapidapi_host: str = "network-as-code.p-eu.rapidapi.com"
 
     # No default. A shipped default signing secret is the same as no
     # authentication at all, because anyone who has read the source can mint a

@@ -22,6 +22,8 @@ dependencies = [
   # meta-package would also drag in the Anthropic and OpenAI SDKs, which this
   # project deliberately does not use — the agent runs on Gemini.
   "pydantic-ai-slim[google]>=2.0,<3.0",
+  # Nokia's own Network as Code client, for the CAMARA calls.
+  "network-as-code>=10.0,<11.0",
 ]
 
 dev = [
