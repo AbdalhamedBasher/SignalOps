@@ -38,7 +38,18 @@ function normalizeBaseUrl(raw: string | undefined): string {
   const value = (raw ?? "").trim().replace(/\/+$/, "");
 
   if (value) {
-    return /^https?:\/\//.test(value) ? value : `https://${value}`;
+    const withScheme = /^https?:\/\//.test(value) ? value : `https://${value}`;
+    const { hostname } = new URL(withScheme);
+
+    // Render's `fromService … property: host` yields the bare SERVICE NAME
+    // ("signalops-api-i1fy"), not a fully-qualified host. A hostname with no
+    // dot in it cannot resolve publicly, so complete it rather than shipping a
+    // URL the browser can only fail on.
+    if (!hostname.includes(".") && !isLocalHost(hostname)) {
+      return withScheme.replace(hostname, `${hostname}.onrender.com`);
+    }
+
+    return withScheme;
   }
 
   if (typeof window !== "undefined" && !isLocalHost(window.location.hostname)) {

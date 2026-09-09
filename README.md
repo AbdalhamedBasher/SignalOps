@@ -263,9 +263,15 @@ deployed:
 - `DATABASE_URL` — Render injects `postgres://`, which SQLAlchemy 2.0 no longer
   accepts. Alembic normalises it too, not just the app: migrations run *first*
   on Render, so a fix in only one place still dies on boot.
-- `VITE_API_URL` — Render's `property: host` yields a bare hostname. Without a
-  scheme, `fetch` reads it as a relative path, and the WebSocket feed must be
-  upgraded to `wss://` or the browser refuses it from an https page.
+- `VITE_API_URL` — Render's `property: host` yields the bare *service name*
+  (`signalops-api-i1fy`), not a resolvable host. Three things therefore have to
+  be repaired before it is usable: the missing scheme, or `fetch` reads it as a
+  relative path; the missing `.onrender.com`, or DNS cannot resolve it; and the
+  scheme again for the WebSocket feed, which must become `wss://` or the browser
+  refuses it from an https page.
+
+  Vite inlines this at **build** time, so a dashboard built before the API
+  service existed compiles an empty value and only a rebuild can fix it.
 
 On the free plan the API sleeps after inactivity and takes roughly 50 seconds to
 wake. Open the dashboard once before any demo.
