@@ -133,6 +133,7 @@ def get_network(
         return NokiaNetworkAsCode(
             api_key=settings.nokia_api_key,
             rapidapi_host=settings.nokia_rapidapi_host,
+            simulator_mode=settings.nokia_simulator_mode,
         )
 
     degraded = {

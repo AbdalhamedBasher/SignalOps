@@ -11,10 +11,10 @@
 
 | Reviewer Note / Mandatory Requirement | Phase 1 Gap | Phase 2 Resolution in this Deck |
 | :--- | :--- | :--- |
-| **CAMARA Network APIs** | Did not mention network APIs at all | **Slides 4 & 6**: Feature **Device Reachability Status** and **Congestion Insights** on **Nokia Network as Code** as the core intelligence source. |
+| **CAMARA Network APIs** | Did not mention network APIs at all | **Slides 4 & 6**: Feature **Device Reachability Status**, **Congestion Insights** and **Location Verification** on **Nokia Network as Code** as the core intelligence source. |
 | **AI Agent Layer Orchestration** | N/A | **Slide 5**: Details how **Google Gemini** via **Pydantic AI** autonomously calls CAMARA APIs as tools rather than passive UI buttons. |
 | **Mandatory Theme Alignment** | Ambiguous | **Slide 1 & Throughout**: Explicitly anchored in **Industrial & Enterprise AI Automation**. |
-| **Telemetry Honesty** | Risk of claiming live subscriber telemetry without carrier access | **Slide 8**: Both CAMARA APIs call Nokia's platform live through its official SDK, in Nokia's Simulator mode. The API integration is real; the network data behind it is Nokia's simulation, and we say so rather than implying commercial telemetry. |
+| **Telemetry Honesty** | Risk of claiming live subscriber telemetry without carrier access | **Slide 8**: All three CAMARA APIs call Nokia's platform live through its official SDK, in Nokia's Simulator mode. The API integration is real; the network data behind it is Nokia's simulation, and we say so rather than implying commercial telemetry. |
 
 ---
 
@@ -93,18 +93,24 @@
 ## Slide 4: Mandatory Requirement 1 — CAMARA on Nokia Network as Code
 
 ### Slide Visual & Copy
-- **API 1: CAMARA Device Reachability Status** (`/device-reachability-status/v1/retrieve`)
+- **API 1: CAMARA Device Reachability Status** (`device-status/device-reachability-status/v1/retrieve`)
   - **Purpose**: Checks whether known subscriber and IoT devices registered behind the alarming cell site can still be reached over data or SMS.
   - **Value**: Turns a theoretical inventory estimate into verified operational evidence. If devices remain reachable, the site is surviving on a secondary backhaul link.
-- **API 2: CAMARA Congestion Insights** (`/congestion-insights/v1/query`)
-  - **Purpose**: Directly queries radio cell congestion levels (`NONE`, `LOW`, `MEDIUM`, `HIGH`).
-  - **Value**: Corroborates whether alarms claiming service degradation are experiencing real packet loss or localized radio interference.
-- **Unified Abstraction**: Both APIs sit behind a unified protocol in `backend/app/network_intelligence.py`.
+- **API 2: CAMARA Congestion Insights** (`congestion-insights/v0/query`)
+  - **Purpose**: Returns congestion over a time window (`Low`, `Medium`, `High`) with a confidence score.
+  - **Value**: Corroborates whether alarms claiming service degradation reflect real radio saturation.
+- **API 3: CAMARA Location Verification** (`location/verify`)
+  - **Purpose**: Confirms whether the dispatched field engineer's own handset is inside a 2 km circle around the site.
+  - **Value**: Closes the dispatch loop — the incident can record that someone is physically there. Consent-based and read-only: it answers yes/no about a circle rather than returning coordinates, and the device belongs to an employee who agreed to it.
+- **Unified Abstraction**: All three sit behind one protocol in `backend/app/network_intelligence.py`, with a deterministic local simulator as the demo fallback.
+- **Called via Nokia's official SDK**: paths above are the real ones. Our first hand-written attempt guessed both wrong, which is why the client was rebuilt on `network-as-code`.
 
 ### Speaker Notes
-> *"To fulfill the first mandatory requirement of this hackathon, SignalOps AI integrates two core CAMARA network APIs available on Nokia Network as Code.*
+> *"To fulfil the first mandatory requirement, SignalOps AI integrates three CAMARA network APIs on Nokia Network as Code.*
 >
-> *Device Reachability Status queries the network to see if mobile devices at the site can actually communicate. Congestion Insights gives an independent, real-time read on radio saturation. Together, they answer the single most important operational question: 'Is this fault actively impacting our customers right now?'"*
+> *Device Reachability Status asks whether devices at the site can still communicate. Congestion Insights gives an independent read on radio saturation. Location Verification confirms whether the dispatched engineer has actually arrived. Together they answer the question a NOC cannot answer today: is this fault actually reaching our customers, and is anyone there yet?*
+>
+> *One detail we think matters: we measured which of these readings genuinely discriminate. In Nokia's Simulator mode, Location Verification returns TRUE for any coordinates on Earth — so our agent marks that reading unverified rather than reporting an engineer on site on the strength of it."*
 
 ---
 
@@ -221,7 +227,8 @@ flowchart LR
   - **92 passing automated tests** covering correlation, persistence, realtime sockets, runbooks, auth, and agent tool execution.
   - Pydantic AI `TestModel` test verifies CAMARA tools are invoked during triage without spending model quota.
 - **Live Nokia Integration, Precisely Stated**:
-  - **Both CAMARA APIs answer from Nokia's platform.** Device Reachability Status and Congestion Insights are called through Nokia's official `network-as-code` SDK, not hand-rolled HTTP. Every reading is stamped `nokia-network-as-code`.
+  - **Three CAMARA APIs answer from Nokia's platform.** Device Reachability Status, Congestion Insights and Location Verification are called through Nokia's official `network-as-code` SDK, not hand-rolled HTTP. Every reading is stamped `nokia-network-as-code`.
+  - **We measured which readings actually mean something.** In Simulator mode, Location Verification returns TRUE for Riyadh, Sydney and Reykjavik alike. So that reading declares itself non-discriminating, and the agent is instructed never to report an engineer as on site on the strength of an answer that would say the same about anywhere on Earth.
   - **Running in Nokia's Simulator mode** — the mode Nokia and the organisers recommend. The API integration is real; the network data behind it is Nokia's simulation. We are not claiming live commercial subscriber telemetry, and no billing account is required.
   - **A deterministic local simulator remains** as the fallback when no key is configured, so a rate limit or an outage can never kill the demo.
   - **Clear UI Labeling**: Every reading tags its origin, so simulated and platform data can never be confused.
@@ -229,7 +236,7 @@ flowchart LR
 ### Speaker Notes
 > *"We are precise about what is real here, because the distinction matters.*
 >
-> *Both CAMARA APIs are called live against Nokia's Network as Code platform, through Nokia's own SDK. Our account runs in Simulator mode — the mode Nokia recommends and the organisers suggested — so the API integration is genuine while the network data behind it is Nokia's simulation. We are not claiming live commercial telemetry.*
+> *Three CAMARA APIs are called live against Nokia's Network as Code platform, through Nokia's own SDK. Our account runs in Simulator mode — the mode Nokia recommends and the organisers suggested — so the API integration is genuine while the network data behind it is Nokia's simulation. We are not claiming live commercial telemetry.*
 >
 > *Building it live caught things a mock never would: Nokia's SDK ships a default host that rejects console-issued keys, and our first hand-written endpoint paths were wrong in both APIs. It also caught a reasoning fault in our own agent — on a healthy site it reported impact confirmed while its own evidence said nothing was unreachable. We found that because we ran it against the real thing."*
 

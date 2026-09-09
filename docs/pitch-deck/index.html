@@ -390,18 +390,24 @@
       <p class="slide__tag">Mandatory Requirement #1</p>
       <h2 class="slide__title">CAMARA APIs on Nokia Network as Code</h2>
       <div class="slide__content">
-        <div class="grid-2">
+        <div class="grid-3">
           <div class="card card--accent">
-            <h3>CAMARA Device Reachability Status</h3>
-            <span class="mono-pill">/device-reachability-status/v1/retrieve</span>
-            <p style="margin-top: 10px;">Queries whether known subscriber and IoT devices registered at this site can be reached over data or SMS.</p>
-            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);"><strong>Operational Finding:</strong> Turns a static lookup number into verified ground truth. If devices remain reachable, the site is surviving.</p>
+            <h3>Device Reachability Status</h3>
+            <span class="mono-pill">device-status/device-reachability-status/v1/retrieve</span>
+            <p style="margin-top: 10px;">Asks whether devices registered at this site can still be reached over data or SMS.</p>
+            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);"><strong>Finding:</strong> Turns a static lookup into verified ground truth. Devices still reachable means the site is surviving.</p>
           </div>
           <div class="card card--accent">
-            <h3>CAMARA Congestion Insights</h3>
-            <span class="mono-pill">/congestion-insights/v1/query</span>
-            <p style="margin-top: 10px;">Queries radio cell congestion levels (<code>NONE</code>, <code>LOW</code>, <code>MEDIUM</code>, <code>HIGH</code>) directly from the platform.</p>
-            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);"><strong>Operational Finding:</strong> Corroborates whether alarms reporting degradation reflect actual congestion or hardware sensor faults.</p>
+            <h3>Congestion Insights</h3>
+            <span class="mono-pill">congestion-insights/v0/query</span>
+            <p style="margin-top: 10px;">Returns congestion over a time window (<code>Low</code>, <code>Medium</code>, <code>High</code>) with a confidence score.</p>
+            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);"><strong>Finding:</strong> An independent second opinion on alarms claiming degradation rather than outage.</p>
+          </div>
+          <div class="card card--accent">
+            <h3>Location Verification</h3>
+            <span class="mono-pill">location/verify</span>
+            <p style="margin-top: 10px;">Confirms whether the dispatched engineer's own handset is inside a 2&nbsp;km circle around the site. Consent-based, and answers yes/no rather than returning coordinates.</p>
+            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--warning);"><strong>Measured limit:</strong> in Simulator mode this answers TRUE for any coordinates on Earth, so we mark it unverified rather than call it proof.</p>
           </div>
         </div>
       </div>
@@ -492,7 +498,7 @@
     </article>
 
     <!-- Slide 8: Technical Validation & Transparency -->
-    <article class="slide" data-notes="We are precise about what is real, because the distinction matters. Both CAMARA APIs are called live against Nokia Network as Code through Nokia's own SDK. Our account runs in Simulator mode, which Nokia and the organisers recommend, so the API integration is genuine while the network data behind it is Nokia's simulation. We do not claim live commercial telemetry. Building it live caught things a mock never would: Nokia's SDK ships a default host that rejects console-issued keys, and it caught a reasoning fault in our own agent that the local simulator had hidden.">
+    <article class="slide" data-notes="We are precise about what is real, because the distinction matters. Three CAMARA APIs are called live against Nokia Network as Code through Nokia's own SDK. We also measured which of their readings actually discriminate: in Simulator mode, Location Verification answers TRUE for any coordinates on Earth, so we mark it non-discriminating rather than presenting it as proof. Our account runs in Simulator mode, which Nokia and the organisers recommend, so the API integration is genuine while the network data behind it is Nokia's simulation. We do not claim live commercial telemetry. Building it live caught things a mock never would: Nokia's SDK ships a default host that rejects console-issued keys, and it caught a reasoning fault in our own agent that the local simulator had hidden.">
       <p class="slide__tag">Engineering Rigor</p>
       <h2 class="slide__title">Technical Validation & Transparent Telemetry</h2>
       <div class="slide__content">
@@ -500,11 +506,11 @@
           <div class="card card--accent">
             <h3>92 Passing Automated Tests</h3>
             <p>Complete pytest coverage across alarm correlation, database persistence, WebSocket feeds, runbook retrieval, RBAC auth, and agent tool execution.</p>
-            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);">Pydantic AI <code>TestModel</code> proves both CAMARA tools are wired and invoked without consuming live quota.</p>
+            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);">Pydantic AI <code>TestModel</code> proves all three CAMARA tools are wired and invoked without consuming live quota.</p>
           </div>
           <div class="card">
             <h3>Live Nokia, Precisely Stated</h3>
-            <p><strong>Both CAMARA APIs answer from Nokia's platform</strong>, called through Nokia's official <code>network-as-code</code> SDK. Every reading is stamped <code>nokia-network-as-code</code>.</p>
+            <p><strong>Three CAMARA APIs answer from Nokia's platform</strong> — Device Reachability, Congestion Insights and Location Verification — through Nokia's official <code>network-as-code</code> SDK. Every reading is stamped <code>nokia-network-as-code</code>.</p>
             <p style="margin-top: 8px;"><strong>Nokia Simulator mode</strong> — as Nokia and the organisers recommend. The API integration is real; the network data behind it is Nokia's simulation. We do not claim live commercial telemetry.</p>
             <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">A local simulator remains as fallback, so a rate limit can never kill the demo. Every reading labels its origin on screen.</p>
           </div>

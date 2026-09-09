@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # console-issued key. This is the host those keys actually route
     # through — found by trying them, not documented anywhere we could read.
     nokia_rapidapi_host: str = "network-as-code.nokia.rapidapi.com"
+    # A free account runs in Nokia's Simulator mode, where location
+    # verification answers TRUE for any coordinates on Earth. Recorded so
+    # readings can declare themselves non-discriminating instead of being
+    # mistaken for evidence. Set false only with a commercial account.
+    nokia_simulator_mode: bool = True
 
     # No default. A shipped default signing secret is the same as no
     # authentication at all, because anyone who has read the source can mint a

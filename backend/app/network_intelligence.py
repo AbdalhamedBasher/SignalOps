@@ -99,12 +99,58 @@ class CongestionInsight(BaseModel):
     checked_at: datetime
 
 
+class LocationVerdict(StrEnum):
+    """CAMARA location-verification results."""
+
+    TRUE = "TRUE"
+    FALSE = "FALSE"
+    PARTIAL = "PARTIAL"
+    UNKNOWN = "UNKNOWN"
+
+
+class EngineerLocation(BaseModel):
+    """Whether the dispatched engineer's device is at the incident site."""
+
+    site_id: str
+    device_id: str
+    result: LocationVerdict
+    source: DataSource
+    checked_at: datetime
+    # True when the answering source cannot actually distinguish one place from
+    # another. Nokia's Simulator mode returns TRUE for every coordinate on
+    # Earth, so a TRUE from it is not evidence of anything and must not be
+    # presented as if it were.
+    discriminating: bool = True
+
+    @property
+    def summary(self) -> str:
+        if not self.discriminating:
+            return (
+                f"Location verification for {self.device_id} returned "
+                f"{self.result}, but this account is in Nokia Simulator mode, "
+                f"which returns TRUE for any coordinates. Treat as unverified."
+            )
+
+        if self.result is LocationVerdict.TRUE:
+            return f"{self.device_id} is within the area around {self.site_id}."
+
+        if self.result is LocationVerdict.FALSE:
+            return f"{self.device_id} is NOT within the area around {self.site_id}."
+
+        return (
+            f"Location for {self.device_id} could not be established "
+            f"({self.result})."
+        )
+
+
 class NetworkIntelligence(Protocol):
     """The CAMARA surface the agent is allowed to reach for."""
 
     def device_reachability(self, site_id: str) -> SiteReachability: ...
 
     def congestion(self, site_id: str) -> CongestionInsight: ...
+
+    def engineer_at_site(self, site_id: str) -> EngineerLocation: ...
 
 
 # Devices known to sit behind each site. In a real deployment this comes from
@@ -129,6 +175,32 @@ SITE_DEVICES: dict[str, list[str]] = {
     "JED-118": ["+3670123457", "+3670123458"],
     "DMM-052": ["+3670123450", "+3670123451"],
 }
+
+
+# Where each site physically is, for location verification. Real coordinates
+# for the regions the site identifiers name.
+SITE_LOCATIONS: dict[str, tuple[float, float]] = {
+    "RUH-104": (24.7136, 46.6753),
+    "RUH-207": (24.6877, 46.7219),
+    "RUH-315": (24.7743, 46.7386),
+    "JED-031": (21.4858, 39.1925),
+    "JED-118": (21.5433, 39.1728),
+    "DMM-052": (26.4207, 50.0888),
+}
+
+# How close to the site counts as "on site", in metres. Wide enough to cover a
+# compound and its access road rather than demanding the engineer stand on the
+# mast.
+ON_SITE_RADIUS_METRES = 2000
+
+# The field engineer's own handset. A person who can consent, which is what
+# makes this use of location verification legitimate — this is not a way to
+# locate subscribers, and the API could not do that here anyway.
+FIELD_ENGINEER_DEVICE = "+3670123457"
+
+
+def location_of(site_id: str) -> tuple[float, float] | None:
+    return SITE_LOCATIONS.get(site_id)
 
 
 def devices_at(site_id: str) -> list[str]:
@@ -195,6 +267,25 @@ class SimulatedNetwork:
             site_id=site_id, devices=devices, source=DataSource.SIMULATOR
         )
 
+    def engineer_at_site(self, site_id: str) -> EngineerLocation:
+        """
+        Whether the engineer has arrived, derived deterministically.
+
+        Unlike Nokia's Simulator mode this actually discriminates, so a
+        rehearsal can show both "on site" and "not yet" and the agent can be
+        seen reasoning about each.
+        """
+        arrived = _stable_fraction("dispatch", site_id) < 0.5
+
+        return EngineerLocation(
+            site_id=site_id,
+            device_id=FIELD_ENGINEER_DEVICE,
+            result=LocationVerdict.TRUE if arrived else LocationVerdict.FALSE,
+            source=DataSource.SIMULATOR,
+            checked_at=datetime.now(UTC),
+            discriminating=True,
+        )
+
     def congestion(self, site_id: str) -> CongestionInsight:
         severity = self.degraded_sites.get(site_id, "")
 
@@ -238,9 +329,19 @@ class NokiaNetworkAsCode:
     SDK's own types, but nothing here has met the real network.
     """
 
-    def __init__(self, *, api_key: str, rapidapi_host: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        rapidapi_host: str | None = None,
+        simulator_mode: bool = True,
+    ) -> None:
         from network_as_code import NetworkAsCodeApi  # noqa: PLC0415
 
+        # A free Network as Code account runs in Simulator mode, where some
+        # endpoints return a fixed answer. Recorded so readings can say whether
+        # they actually distinguish anything.
+        self._simulator_mode = simulator_mode
         self._client = NetworkAsCodeApi(
             api_key=api_key,
             rapidapi_host=rapidapi_host or DEFAULT_RAPIDAPI_HOST,
@@ -291,6 +392,67 @@ class NokiaNetworkAsCode:
             return ReachabilityStatus.CONNECTED_DATA
 
         return ReachabilityStatus.CONNECTED_SMS
+
+    def engineer_at_site(self, site_id: str) -> EngineerLocation:
+        """
+        Ask CAMARA Location Verification whether the engineer is at the site.
+
+        Consent-based and read-only: it answers a yes/no about a circle rather
+        than returning coordinates, and the device belongs to an employee who
+        can agree to it. This is not a way to locate subscribers.
+        """
+        now = datetime.now(UTC)
+        coordinates = location_of(site_id)
+
+        if coordinates is None:
+            return EngineerLocation(
+                site_id=site_id,
+                device_id=FIELD_ENGINEER_DEVICE,
+                result=LocationVerdict.UNKNOWN,
+                source=DataSource.NOKIA_NETWORK_AS_CODE,
+                checked_at=now,
+                discriminating=False,
+            )
+
+        latitude, longitude = coordinates
+
+        try:
+            result = self._client.location.verify(
+                device={"phone_number": FIELD_ENGINEER_DEVICE},
+                area={
+                    "area_type": "CIRCLE",
+                    "center": {"latitude": latitude, "longitude": longitude},
+                    "radius": ON_SITE_RADIUS_METRES,
+                },
+            )
+        except Exception:
+            logger.exception("Location verification failed for %s", site_id)
+
+            return EngineerLocation(
+                site_id=site_id,
+                device_id=FIELD_ENGINEER_DEVICE,
+                result=LocationVerdict.UNKNOWN,
+                source=DataSource.NOKIA_NETWORK_AS_CODE,
+                checked_at=now,
+                discriminating=False,
+            )
+
+        try:
+            verdict = LocationVerdict(str(result.verification_result))
+        except ValueError:
+            verdict = LocationVerdict.UNKNOWN
+
+        return EngineerLocation(
+            site_id=site_id,
+            device_id=FIELD_ENGINEER_DEVICE,
+            result=verdict,
+            source=DataSource.NOKIA_NETWORK_AS_CODE,
+            checked_at=now,
+            # Measured, not assumed: in Simulator mode this endpoint answered
+            # TRUE for Riyadh, Sydney and Reykjavik alike. A TRUE from it is
+            # not evidence the engineer is anywhere in particular.
+            discriminating=not self._simulator_mode,
+        )
 
     def congestion(self, site_id: str) -> CongestionInsight:
         now = datetime.now(UTC)

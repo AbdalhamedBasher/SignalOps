@@ -100,6 +100,9 @@ site can still be reached. This is the strongest evidence of real customer \
 impact — an alarm says equipment is unhappy, this says subscribers are cut off.
 - `get_congestion_insight` asks the network how congested the site is. Use it \
 to corroborate or contradict alarms that claim degradation rather than outage.
+- `check_engineer_on_site` asks whether the dispatched field engineer has \
+reached the site. Use it only when a runbook step involves dispatch or \
+escalation, so you can say whether someone is already there.
 - `get_runbook_guidance` returns the approved procedures already matched to \
 this incident.
 
@@ -118,6 +121,12 @@ Choosing the verdict — apply this to the reachability reading and nothing else
 - Some unreachable, some still reachable -> `partial`.
 - NONE unreachable, every device still answering -> `not_confirmed`.
 - Reachability could not be read at all -> `unknown`.
+
+If a reading tells you it is not discriminating — that its source returns the \
+same answer whatever it is asked — then it is not evidence. Report what it \
+returned and say it could not be confirmed. Never state that an engineer is on \
+site on the strength of an answer that would have said the same about anywhere \
+on Earth.
 
 The verdict describes whether *subscribers are cut off*, which is what \
 reachability measures. Congestion is context, never the deciding factor: a \
@@ -197,6 +206,22 @@ def build_agent(model_name: str, api_key: str) -> Agent[TriageDeps, TriageReport
             f"Congestion at {site_id}: {insight.level} (source: {insight.source}). "
             f"{insight.detail}"
         )
+
+    @agent.tool
+    def check_engineer_on_site(context: RunContext[TriageDeps]) -> str:
+        """
+        Ask the network whether the dispatched field engineer has reached this
+        incident's site. Use it only when the runbooks call for a dispatch or
+        an escalation, to say whether someone is already there.
+        """
+        site_id = context.deps.incident.site_id
+        reading = context.deps.network.engineer_at_site(site_id)
+
+        context.deps.trace.append(
+            f"Called CAMARA Location Verification for {site_id} ({reading.source})"
+        )
+
+        return reading.summary
 
     @agent.tool
     def get_runbook_guidance(context: RunContext[TriageDeps]) -> str:

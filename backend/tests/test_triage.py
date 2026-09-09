@@ -6,6 +6,8 @@ TestModel, which exercises every tool the agent exposes — which is exactly wha
 needs proving: that the CAMARA APIs are tools the agent can call, not decoration.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic_ai.models.test import TestModel
@@ -17,9 +19,12 @@ from app.models import GeneratedTriage, Incident, Recommendation
 from app.network_intelligence import (
     CongestionLevel,
     DataSource,
+    EngineerLocation,
+    LocationVerdict,
     ReachabilityStatus,
     SimulatedNetwork,
     devices_at,
+    location_of,
 )
 from app.triage import TriageUnavailable, UngroundedTriage, verify_citations
 from tests.conftest import ENGINEER
@@ -307,3 +312,91 @@ def test_triage_requires_authentication() -> None:
 
     assert bare.post(f"/api/incidents/{BACKHAUL_INCIDENT}/triage").status_code == 401
     assert bare.get(f"/api/incidents/{BACKHAUL_INCIDENT}/triage").status_code == 401
+
+
+# ------------------------------------------------- location verification
+
+
+def test_the_simulator_can_place_the_engineer_on_or_off_site() -> None:
+    """
+    Rehearsal needs both answers.
+
+    Nokia's Simulator mode returns TRUE for every coordinate, so the local
+    simulator is the only place a `FALSE` can be demonstrated.
+    """
+    network = SimulatedNetwork(degraded_sites={})
+    results = {
+        network.engineer_at_site(site).result
+        for site in ["RUH-104", "RUH-207", "RUH-315", "JED-031", "JED-118", "DMM-052"]
+    }
+
+    assert LocationVerdict.TRUE in results
+    assert LocationVerdict.FALSE in results
+
+
+def test_engineer_location_is_deterministic() -> None:
+    first = SimulatedNetwork(degraded_sites={}).engineer_at_site("RUH-104")
+    second = SimulatedNetwork(degraded_sites={}).engineer_at_site("RUH-104")
+
+    assert first.result is second.result
+    assert first.device_id == second.device_id
+
+
+def test_a_non_discriminating_reading_says_so_in_its_own_summary() -> None:
+    """
+    The guard against the demo's worst failure: presenting a meaningless TRUE
+    as proof an engineer arrived. Measured against the live API, which answered
+    TRUE for Riyadh, Sydney and Reykjavik alike.
+    """
+    reading = EngineerLocation(
+        site_id="RUH-104",
+        device_id="+3670123457",
+        result=LocationVerdict.TRUE,
+        source=DataSource.NOKIA_NETWORK_AS_CODE,
+        checked_at=datetime(2026, 9, 9, 10, 0, tzinfo=UTC),
+        discriminating=False,
+    )
+
+    assert "Simulator mode" in reading.summary
+    assert "unverified" in reading.summary.lower()
+
+
+def test_a_discriminating_reading_states_the_answer_plainly() -> None:
+    reading = EngineerLocation(
+        site_id="RUH-104",
+        device_id="+3670123457",
+        result=LocationVerdict.FALSE,
+        source=DataSource.SIMULATOR,
+        checked_at=datetime(2026, 9, 9, 10, 0, tzinfo=UTC),
+        discriminating=True,
+    )
+
+    assert "NOT within" in reading.summary
+    assert "Simulator mode" not in reading.summary
+
+
+def test_every_site_on_the_board_has_coordinates_to_verify_against() -> None:
+    for site_id in ["RUH-104", "RUH-207", "JED-031"]:
+        assert location_of(site_id) is not None, site_id
+
+
+def test_the_agent_can_call_all_three_camara_tools() -> None:
+    """The orchestration claim, now across three CAMARA APIs rather than two."""
+    incident = backhaul_incident()
+    trace: list[str] = []
+
+    agent = build_agent("gemini-flash-lite-latest", api_key="not-used-by-testmodel")
+    deps = TriageDeps(
+        incident=incident,
+        recommendations=proposed_recommendations(),
+        network=SimulatedNetwork(degraded_sites={incident.site_id: "critical"}),
+        trace=trace,
+    )
+
+    with agent.override(model=TestModel()):
+        agent.run_sync(describe_incident(incident), deps=deps)
+
+    joined = " ".join(trace)
+    assert "Device Reachability" in joined
+    assert "Congestion Insights" in joined
+    assert "Location Verification" in joined
