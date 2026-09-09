@@ -1,120 +1,106 @@
 # SignalOps AI
 
-A learning-first telecom incident-management MVP built with React, TypeScript, and FastAPI.
+Autonomous telecom incident triage. Raw network alarms are correlated into
+incidents, an AI agent consults live CAMARA network APIs to establish whether
+subscribers are genuinely affected, and approved runbook procedures reach an
+engineer with citations and a decision to make.
 
-## Current vertical slice
+Built for the **GSMA MENA Ignite Hackathon** under the *Industrial & Enterprise
+AI Automation* theme, on **Nokia Network as Code**.
 
-Raw alarms arrive, get grouped into incidents by deterministic rules, and reach
-the dashboard as one actionable story:
+---
+
+## What problem it solves
+
+One fibre cut at a cell site does not produce one alarm. It produces a cascade —
+backhaul down, cells out of service, control-plane link lost, VoLTE
+registrations failing — arriving out of order, within seconds. A legacy NOC
+board shows four tickets and a subscriber-impact number read from a static
+inventory table written months ago.
+
+SignalOps collapses the cascade into one incident, then asks the network the
+question the inventory table cannot answer: **are subscribers actually cut off
+right now?**
+
+That answer can contradict the alarm, and that is the point. An incident whose
+equipment is alarming while every device stays reachable is a callout that did
+not need to happen.
+
+---
+
+## How it works
 
 ```text
-Alarm posted to /api/alarms
-        ↓ catalog lookup (severity, title, probable cause)
-Correlation rules: same site, still open, inside the window?
-        ↓ join an incident, or open a new one
-In-memory incident store
-        ↓ JSON over HTTP
-React API client (validates every field it relies on)
-        ↓ typed state
-Dashboard metrics, incident cards, alarm timeline
+Alarms POSTed to /api/alarms  (collector role only)
+        │
+        ▼  deterministic correlation — same site, still open, sliding 15-minute window
+   One incident, severity derived from its worst alarm
+        │
+        ▼  retrieval — alarm codes matched against approved runbooks
+   Cited procedures, supervisor-gated where the runbook says so
+        │
+        ▼  the AI agent decides which network signals it needs
+   ┌──────────────────────────────────────────────────────┐
+   │  CAMARA Device Reachability Status   ← are they cut off?
+   │  CAMARA Congestion Insights          ← is the site degraded?
+   │  CAMARA Location Verification        ← has the engineer arrived?
+   └──────────────────────────────────────────────────────┘
+        │
+        ▼  verdict + evidence + cited actions, streamed as it works
+   Engineer approves or rejects. Nothing touches the network without them.
 ```
 
-The backend validates every outgoing incident with Pydantic. The frontend treats network data as untrusted and validates its shape before putting it into React state.
+The agent is a **Google Gemini** model driven by **Pydantic AI**. The CAMARA
+APIs are tools it chooses to call, not buttons a user presses.
 
-## Watch correlation happen
+---
 
-With both servers running, replay a fault:
+## The three CAMARA APIs
+
+All called through Nokia's official `network-as-code` SDK. Every reading records
+which source answered.
+
+| API | Question it answers | Endpoint |
+| --- | --- | --- |
+| Device Reachability Status | Can devices at this site still be reached? | `device-status/device-reachability-status/v1/retrieve` |
+| Congestion Insights | Is the site congested, over what window? | `congestion-insights/v0/query` |
+| Location Verification | Is the dispatched engineer within 2 km of the site? | `location/verify` |
+
+**On honesty.** A free Network as Code account runs in Nokia's *Simulator
+mode*: the API integration is real, the network data behind it is Nokia's
+simulation. We do not claim live commercial subscriber telemetry.
+
+We also measured which readings actually discriminate. In Simulator mode,
+Location Verification returns `TRUE` for Riyadh, Sydney and Reykjavik alike — so
+that reading marks itself non-discriminating, and the agent is instructed never
+to report an engineer as on site on the strength of it.
+
+Without a Nokia key, a deterministic local simulator answers instead, seeded
+from the incident board so its readings stay consistent with what the board
+reports. Every reading is labelled on screen, so simulated and platform data can
+never be confused.
+
+---
+
+## Quick start
+
+### Backend
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe scripts\simulate.py --site RUH-315 --retry-last
-```
-
-Four alarms are posted seconds apart. They collapse into a single critical
-incident, and the redelivered final alarm is recognised rather than counted
-twice.
-
-Leave the dashboard open while it runs: the incident appears, climbs in
-severity, and lands in the live activity feed without a reload. Kill the API
-and the header indicator turns red and starts retrying; bring it back and the
-dashboard reconnects and re-reads the board on its own.
-
-## Project structure
-
-```text
-signalops-ai/
-├── backend/        FastAPI application and API tests
-├── frontend/       React + TypeScript dashboard
-└── docs/           MVP scope and implementation roadmap
-```
-
-## Run the backend on Windows
-
-```powershell
-cd backend
-C:\Python314\python.exe -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-`alembic upgrade head` creates the schema and is required before the first
-start; the API refuses to boot without it rather than failing later with a
-confusing SQL error. The seed incidents are inserted automatically the first
-time the database is found empty.
+`alembic upgrade head` is required before the first start — the API refuses to
+boot without a schema rather than failing later with a confusing SQL error.
+Seed incidents, users and runbooks are inserted automatically into an empty
+database.
 
-Data lives in `backend/signalops.db` (SQLite) by default. To use PostgreSQL
-instead, set `DATABASE_URL` and run the same migrations:
-
-```powershell
-$env:DATABASE_URL = "postgresql+psycopg://user:password@localhost:5432/signalops"
-alembic upgrade head
-```
-
-The API runs at `http://localhost:8000`. Useful endpoints:
-
-- `GET /health`
-- `GET /api/incidents`
-- `POST /api/alarms` — ingest one alarm; returns the incident it was correlated
-  into, with `201` when recorded and `200` when recognised as a redelivery
-- `GET /ws/incidents` — WebSocket that pushes each incident as it opens or
-  changes. Send-only; clients re-read `/api/incidents` whenever they connect
-- `POST /api/incidents/{id}/recommendations` — match the incident's alarms
-  against the approved runbooks; `GET` the same path to read what was matched
-- `POST /api/recommendations/{id}/approve` and `/reject` — record an engineer's
-  decision, optionally with modified steps
-- `GET /api/incidents/{id}/audit` — the append-only record of who decided what
-- Interactive documentation: `http://localhost:8000/docs`
-
-- `POST /api/incidents/{id}/briefing` — write a short orientation over the
-  already-retrieved sections; `GET` returns the most recent one, or `null`
-
-### Generated briefings (optional)
-
-Off by default. To switch on, install the extra and provide Claude credentials:
-
-```powershell
-python -m pip install -e ".[dev,ai]"
-$env:ENABLE_BRIEFINGS = "true"
-$env:ANTHROPIC_API_KEY = "sk-ant-..."   # or run `ant auth login`
-```
-
-The model is only ever given the runbook sections retrieval already matched,
-and every section it cites is checked against that list — a briefing citing
-anything else is refused rather than shown. With the feature off, the endpoint
-returns `503` with an explanation and nothing else changes.
-
-Runbooks live in `backend/runbooks/` as Markdown and are imported at startup.
-A `## Heading` starts a section and an `Applies to: CODE_A, CODE_B` line under
-it says which alarms it covers. Add a file, restart, and it is searchable.
-
-Alarm timestamps must carry a UTC offset. A timestamp without one is rejected
-with `422`, because ordering events correctly is the whole point of the system.
-
-## Run the frontend
-
-Open another terminal:
+### Frontend
 
 ```powershell
 cd frontend
@@ -122,31 +108,142 @@ npm install
 npm run dev
 ```
 
-The dashboard runs at `http://localhost:5173` and calls the FastAPI server at `http://localhost:8000`.
+The dashboard runs at `http://localhost:5173`. It signs in automatically as the
+demo engineer; use the operator switcher in the header to act as the supervisor.
 
-## Verify the project
+### Demo logins
 
-Backend:
+| Username | Role | Can do |
+| --- | --- | --- |
+| `nadia.k` | engineer | View the board, retrieve guidance, run triage, approve ordinary procedures |
+| `sam.o` | supervisor | Everything an engineer can, plus approve supervisor-gated procedures |
+| `collector-01` | collector | Post alarms only — a machine principal, cannot approve anything |
+
+Passwords are the `SEED_*_PASSWORD` settings in `app/config.py`. They are
+development credentials for a demo; this is not a production auth posture.
+
+### Watch it work
 
 ```powershell
 cd backend
-pytest
+.\.venv\Scripts\python.exe scripts\simulate.py --site RUH-315 --retry-last
 ```
 
-Frontend:
+Four alarms seconds apart collapse into one critical incident; the redelivered
+final alarm is recognised rather than counted twice. Leave the dashboard open —
+the incident appears and climbs in severity without a reload. Kill the API and
+the header indicator turns red and retries; restart it and the dashboard
+reconnects and re-reads the board on its own.
+
+---
+
+## Optional: the AI agent and live network
+
+Both are off unless configured, and the product works without either.
 
 ```powershell
-cd frontend
+# Google AI Studio issues a free key with no credit card
+$env:GOOGLE_API_KEY = "..."
+
+# Nokia Network as Code — register free at networkascode.nokia.io
+$env:NOKIA_API_KEY = "..."
+```
+
+With no `GOOGLE_API_KEY`, triage returns `503` with an explanation and nothing
+else changes. With no `NOKIA_API_KEY`, the CAMARA calls run against the local
+simulator.
+
+Put both in `backend/.env` (gitignored) rather than exporting them.
+
+---
+
+## Endpoints
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/health` | none | Liveness. Deliberately open — load balancers have no credentials |
+| `POST` | `/api/auth/login` | none | Exchange credentials for a bearer token |
+| `GET` | `/api/auth/me` | any | Who the current token belongs to |
+| `GET` | `/api/incidents` | any | The incident board, newest first |
+| `POST` | `/api/alarms` | collector | Ingest one alarm; `201` recorded, `200` recognised redelivery |
+| `GET` | `/ws/incidents` | any | WebSocket push of incident changes. Token in the query string |
+| `POST` | `/api/incidents/{id}/recommendations` | engineer | Match alarms against approved runbooks |
+| `POST` | `/api/recommendations/{id}/approve` \| `/reject` | engineer¹ | Record a decision |
+| `POST` | `/api/incidents/{id}/triage` | engineer | Run the agent; returns the finished report |
+| `POST` | `/api/incidents/{id}/triage/stream` | engineer | Same, streaming each tool call as it happens |
+| `GET` | `/api/incidents/{id}/audit` | engineer | Append-only record of who decided what |
+
+¹ A runbook section carrying a `Requires: supervisor` line can only be approved
+by a supervisor. Rejection stays open to engineers — declining to act is always
+safe.
+
+Interactive documentation at `http://localhost:8000/docs`.
+
+---
+
+## Runbooks
+
+Approved procedures live in `backend/runbooks/` as Markdown, version-controlled
+alongside the code, and are imported at startup.
+
+```markdown
+## Never reset equipment blind
+Applies to: CELL_OUT_OF_SERVICE, POWER_UNSTABLE
+Requires: supervisor
+
+1. A reset destroys the diagnostic state that explains the fault.
+```
+
+`## Heading` starts a section, `Applies to:` names the alarm codes it covers,
+and `Requires: supervisor` gates its approval. Import is keyed on filename and
+skips files already imported — so **editing a runbook after first deploy has no
+effect** until the database is reset.
+
+---
+
+## Design decisions worth knowing
+
+- **Alarm timestamps must carry a UTC offset.** A naive timestamp is ambiguous,
+  and this system exists to establish the order events happened in. Guessing UTC
+  could invert the apparent cause of a cascade, so `422` instead.
+- **Ingestion is idempotent** on the sender's `external_id`, enforced by a unique
+  index rather than application code. Collectors retry; that is correct
+  behaviour, not an error.
+- **Identity comes from the access token, never the request body.** A caller who
+  can name themselves can name anyone.
+- **Nothing generated reaches an engineer uncited.** Every runbook section the
+  agent cites is verified against what it was actually given; a report citing
+  anything else is refused outright rather than shown with the bad citation
+  removed.
+- **The AI never touches the network.** Its output is a recommendation a human
+  approves or rejects.
+
+---
+
+## Verify
+
+```powershell
+cd backend
+pytest                       # 98 tests
+python -m ruff check .
+
+cd ../frontend
 npm run typecheck
 npm run build
 ```
 
-## Learning rule
+No test calls Gemini or Nokia. The agent is driven by Pydantic AI's `TestModel`,
+which exercises every tool it exposes — proving the CAMARA APIs are wired and
+callable without spending quota.
 
-Do not rush to copy code. For every slice, be able to explain:
+---
 
-1. Where the data originates.
-2. Which type or model describes it.
-3. Which boundary validates it.
-4. Which component owns the state.
-5. What the user sees during loading, failure, emptiness, and success.
+## Deployment
+
+`render.yaml` at the repo root provisions the API, the static dashboard and a
+managed Postgres. Set `GOOGLE_API_KEY` and `NOKIA_API_KEY` in the Render
+dashboard, and a fixed `JWT_SECRET` — without one the app generates a random
+signing secret at startup and every token dies on restart.
+
+`DATABASE_URL` is normalised on the way in: Render injects `postgres://`, which
+SQLAlchemy 2.0 no longer accepts.

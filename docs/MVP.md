@@ -157,28 +157,24 @@ Known limit: the broadcaster is in-process, so events reach only dashboards
 connected to the worker that handled the alarm. Running more than one worker
 needs a shared bus (Redis pub/sub or similar) before this holds.
 
-### Evaluated and parked: Nokia Network as Code / CAMARA device-location APIs
+### Reversed: the decision to park the CAMARA network APIs
 
-Considered 2026-08-31. Not adopted for the MVP.
+Recorded because the reasoning was wrong, and the record should say so.
 
-`POST /retrieve` (CAMARA Location Retrieval, offered by Nokia Network as Code)
-returns where **one** device is, given an identifier the caller already holds,
-as a circle with a centre and an accuracy radius.
+On 2026-08-31 these APIs were evaluated and **parked**. The argument: Location
+Retrieval could not improve `affected_subscribers` — true, it is per-device and
+consent-bound, with no "which devices are near this site" operation — and
+anything CAMARA was blocked on Slice 7's authentication work.
 
-- It cannot improve `affected_subscribers`. That is the tempting use, and the
-  API forbids it by design: it is strictly per-device, requires a three-legged
-  token carrying that subscriber's consent, and has no "which devices are near
-  this site" operation — that is precisely the capability the consent model
-  exists to prevent. Real subscriber-impact figures come from operator-internal
-  cell attach counts, not from a public network API.
-- Where it would genuinely fit is confirming that a **dispatched engineer** has
-  reached a site, because an employee can meaningfully consent. For that,
-  Location *Verification* ("is this device inside this circle?") is the better
-  choice than Retrieval, since it answers the question without handing back
-  coordinates.
-- Blocked on Slice 7 regardless: it needs OAuth2/OIDC client infrastructure
-  that does not exist yet. Nokia's SIMULATOR plan would allow building it
-  without real subscribers once that is in place.
+That was sound reasoning for a learning MVP and wrong for this project, which is
+a hackathon submission whose rules make a CAMARA integration **mandatory**. The
+mistake was optimising the engineering sequence while ignoring the constraint
+that actually governed the work. It cost about a week.
+
+Adopted instead, in Slice 8: **Device Reachability Status** and **Congestion
+Insights**, which answer the impact question Location Retrieval could not; and
+**Location Verification**, which does the engineer-dispatch job the original
+note itself identified as the one genuine fit.
 
 ### Slice 6a — Runbook retrieval and the approval gate ✅
 
@@ -219,56 +215,124 @@ engineer's name is whatever the caller typed. Nothing verifies it, so this
 records intent, not identity — it is not yet evidence. It becomes an audit
 trail when Slice 7 puts authentication behind it.
 
-### Slice 6b — Generated incident briefings 🚧
+### Slice 6b — The AI agent ✅
 
-- [x] Generate a short orientation over the retrieved sections
-- [x] Ground it: every cited section is verified against what was retrieved
-- [x] Store what was shown, with the model that wrote it
-- [x] Degrade cleanly when disabled or unreachable
-- [ ] **Verified against the live Claude API** — see below
-- [ ] Evals for briefing quality
+- [x] An agent that decides which signals an incident needs
+- [x] Grounded: every cited section verified against what it was given
+- [x] Stored with the model that wrote it, and its reasoning trace
+- [x] Degrades cleanly when unconfigured or unreachable
+- [x] **Verified against the live Gemini API**
+- [ ] Evals for output quality
 
-Uses `claude-opus-5` through the official `anthropic` Python SDK, with
-structured outputs so the response shape is guaranteed rather than parsed out of
-prose. **Off by default** (`ENABLE_BRIEFINGS=true` to switch on) because it
-calls a paid API and the rest of the product works without it.
+Runs `gemini-flash-lite-latest` through **Pydantic AI**. Both are named in the
+hackathon's Resource & Tooling Guide — Gemini under LLMs and Model APIs,
+Pydantic AI under code-first agent frameworks.
+
+**On the provider change.** This slice originally used Anthropic's model API.
+That is *not* on the approved list — Claude appears only under coding
+assistants — so the path was removed rather than argued for, and its SDK is no
+longer installed.
+
+Model choice was measured, not assumed:
+
+| Model | Run 1 | Run 2 | Verdicts |
+| --- | --- | --- | --- |
+| `gemini-2.5-flash` | 404 — retired for new API keys | | |
+| `gemini-3.6-flash` | 22s | 92s | correct |
+| `gemini-flash-lite-latest` | 6.0s | 6.1s | correct |
+
+The lite model reached the same conclusions on a four-alarm cascade and on a
+false alarm, so the slower model bought nothing and its variance would have hurt
+a live demo.
+
+**A fault the simulator had hidden.** On a site whose devices were all
+reachable, the agent returned `confirmed` while its own evidence said nothing
+was unreachable — the verdict scale was described in prose and left to
+inference, and medium congestion was enough to tip it. The rule is now
+mechanical, with reachability the only input and congestion demoted to context.
+
+### Slice 8 — CAMARA network APIs as agent tools ✅
+
+- [x] Device Reachability Status
+- [x] Congestion Insights
+- [x] Location Verification
+- [x] Called through Nokia's official `network-as-code` SDK
+- [x] Deterministic local simulator as fallback
+- [x] **Verified live against Nokia Network as Code**
+
+This is the slice that makes the product's central claim real.
+`affected_subscribers` was a hardcoded lookup table; the agent now checks it
+against the network and can contradict the alarms.
+
+Two things had to be found by trying, because neither is documented anywhere
+reachable without an account:
+
+- The SDK's own default host, `network-as-code.p-eu.rapidapi.com`, returns
+  RapidAPI's `{"message": "API doesn't exists"}` for a console-issued key. Those
+  keys route through `network-as-code.nokia.rapidapi.com`.
+- The simulator holds fixed device populations that cannot be configured from
+  the API: `+36371234xx` always answers `reachable: false`, `+367012345x`
+  always `true`. Sites are registered against whichever population tells their
+  true story.
+
+The first hand-written client guessed both endpoint paths wrong — reachability
+lives under `device-status/`, and congestion is `v0`, not `v1` — which is why it
+was rebuilt on the vendor SDK.
+
+**Measured limits, stated rather than hidden.** In Nokia's Simulator mode,
+Location Verification returns `TRUE` for Riyadh, Sydney and Reykjavik alike. A
+reading carries a `discriminating` flag, its summary says so, and the agent is
+instructed never to report an engineer on site on that basis. On the first live
+run it complied, leaving the reading out of its evidence entirely.
+
+### Slice 7 — Authentication and roles ✅
+
+- [x] Engineer, supervisor and collector roles
+- [x] Secure API access — every route except `/health` requires a token
+- [x] The audit trail records verified identity
+- [ ] Operational metrics
+- [ ] Deployment and observability
+
+The audit trail previously recorded whatever name the caller typed, which made
+it a log of claims rather than evidence. Identity now comes from the access
+token and `decided_by` is not a field the API reads.
 
 Decisions worth knowing:
 
-- **The model never decides what is relevant.** Deterministic retrieval picks
-  the sections; the model only writes the orientation over what it is handed.
-  That keeps the failure mode "unhelpful summary" rather than "confidently
-  wrong procedure".
-- **Citations are verified, not requested.** The prompt asks the model to cite
-  only the sections it was given; `verify_citations` then checks every returned
-  id against that set. A prompt is a request; the check is the guarantee.
-- **A fabricated citation fails closed.** The briefing is refused entirely
-  rather than shown with the offending citation stripped — if one citation is
-  invented, the prose around it cannot be trusted either.
-- **Provenance is always on screen.** The panel names the model that wrote the
-  text, says it is not a substitute for reading the cited procedures, and
-  renders it visually distinct from approved runbook text.
-- **A generation failure never takes down the dashboard.** Construction
-  failures degrade to the disabled generator; API failures return 503.
-- **Briefings create no approvals.** The recommendations underneath keep their
-  own gate. Nothing generated becomes action.
+- **Argon2id over bcrypt** — the current OWASP recommendation, and no silent
+  72-byte truncation.
+- **The JWT decode algorithm is pinned**, so the classic `alg: none` forgery is
+  refused rather than believed.
+- **Three principals, not two.** A collector is a machine that may only push
+  alarms, so a stolen engineer token cannot fabricate network events and a
+  stolen collector token cannot approve anything.
+- **Supervisor authority comes from the runbook text.** A section carrying
+  `Requires: supervisor` cannot be approved by an engineer — the rule sits with
+  the people who wrote the procedure.
+- **No default signing secret.** A shipped one is the same as no authentication,
+  so an unset `JWT_SECRET` generates a random one and says so loudly.
 
-**Not yet verified against the real API.** Every test replaces the model with a
-stub, and this machine has no Claude credentials, so the live request path —
-`messages.parse`, structured output, real latency and failure modes — was
-written against the SDK documentation and never executed. That box is genuinely
-unticked: the guardrails around the call are tested, the call itself is not.
+Known limit: the demo operator passwords ship in the frontend bundle so role
+switching is one click. Good for judging, not a production posture, and the
+deployed app should not be described as production-secure.
 
-Quality is also unmeasured. Whether the briefings are any *good* is an eval
-question, and there is no eval set yet.
+### Slice 9 — Streaming the agent's reasoning ✅
 
-### Slice 7 — Authentication and presentation
+A live triage takes ten to thirty seconds, most of it real round-trips to Nokia.
+Delivered as one silent wait it looks broken. Tool calls now stream as they
+happen over newline-delimited JSON — not Server-Sent Events, because the
+browser's `EventSource` cannot send an Authorization header.
 
-- Engineer and supervisor roles
-- Secure API access
-- Operational metrics
-- Polished demo scenario
-- Deployment and observability
+Measured: steps landed at 7.7s, 8.5s and 9.5s with the report at 11s.
+
+### Remaining
+
+- **Deployment** — `render.yaml` is ready and the build path is verified, but
+  nothing has been deployed. This gates the demo video.
+- **Frontend tests** — still none. The socket hook and triage panel are the most
+  intricate code in the project and the least covered.
+- **Evals** — whether the agent's output is *good* is unmeasured. Grounded is
+  not the same as useful.
 
 ## Engineering principles
 
