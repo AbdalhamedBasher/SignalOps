@@ -241,9 +241,21 @@ callable without spending quota.
 ## Deployment
 
 `render.yaml` at the repo root provisions the API, the static dashboard and a
-managed Postgres. Set `GOOGLE_API_KEY` and `NOKIA_API_KEY` in the Render
-dashboard, and a fixed `JWT_SECRET` — without one the app generates a random
-signing secret at startup and every token dies on restart.
+managed Postgres. Render prompts for the only two secrets it cannot invent —
+`GOOGLE_API_KEY` and `NOKIA_API_KEY`. `JWT_SECRET` is generated once at provision
+time and persisted, so tokens survive a restart; the app deliberately has no
+default for it, because a signing secret shipped in source is the same as no
+authentication at all.
 
-`DATABASE_URL` is normalised on the way in: Render injects `postgres://`, which
-SQLAlchemy 2.0 no longer accepts.
+Two things are normalised on the way in, both of which otherwise fail only once
+deployed:
+
+- `DATABASE_URL` — Render injects `postgres://`, which SQLAlchemy 2.0 no longer
+  accepts. Alembic normalises it too, not just the app: migrations run *first*
+  on Render, so a fix in only one place still dies on boot.
+- `VITE_API_URL` — Render's `property: host` yields a bare hostname. Without a
+  scheme, `fetch` reads it as a relative path, and the WebSocket feed must be
+  upgraded to `wss://` or the browser refuses it from an https page.
+
+On the free plan the API sleeps after inactivity and takes roughly 50 seconds to
+wake. Open the dashboard once before any demo.
