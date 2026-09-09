@@ -7,6 +7,17 @@
  */
 const LOCAL_API_URL = "http://localhost:8000";
 
+/**
+ * The deployed API, hardcoded on purpose. Render appends a random suffix when a
+ * service name is already taken globally — `signalops-api` was, so the real host
+ * is `signalops-api-i1fy`. That suffix cannot be derived from the dashboard's
+ * own hostname, which rules out inferring one service name from the other.
+ *
+ * This is a fallback, not the configured path: `VITE_API_URL` from render.yaml
+ * still wins whenever it is present.
+ */
+const DEPLOYED_API_URL = "https://signalops-api-i1fy.onrender.com";
+
 function isLocalHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
@@ -31,18 +42,13 @@ function normalizeBaseUrl(raw: string | undefined): string {
   }
 
   if (typeof window !== "undefined" && !isLocalHost(window.location.hostname)) {
-    // render.yaml names both services, so the API host is derivable rather than
-    // guessed: signalops-dashboard.onrender.com -> signalops-api.onrender.com.
-    const { protocol, hostname } = window.location;
-    const derived = `${protocol}//${hostname.replace(/^signalops-dashboard\b/, "signalops-api")}`;
-
     console.error(
       `VITE_API_URL was empty when this dashboard was built, so no API address ` +
-        `was compiled in. Falling back to ${derived}. Rebuild the static site ` +
-        `once the API service exists to bind it properly.`,
+        `was compiled in. Falling back to ${DEPLOYED_API_URL}. Rebuild the ` +
+        `static site to bind it properly.`,
     );
 
-    return derived;
+    return DEPLOYED_API_URL;
   }
 
   return LOCAL_API_URL;

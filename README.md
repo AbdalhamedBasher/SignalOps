@@ -240,6 +240,16 @@ callable without spending quota.
 
 ## Deployment
 
+| | |
+| --- | --- |
+| Dashboard | https://signalops-dashboard.onrender.com |
+| API | https://signalops-api-i1fy.onrender.com |
+
+The API name carries a `-i1fy` suffix because Render appends one when a service
+name is already taken globally. It cannot be derived from the dashboard's
+hostname, so the frontend keeps it as an explicit fallback rather than inferring
+one service name from the other.
+
 `render.yaml` at the repo root provisions the API, the static dashboard and a
 managed Postgres. Render prompts for the only two secrets it cannot invent —
 `GOOGLE_API_KEY` and `NOKIA_API_KEY`. `JWT_SECRET` is generated once at provision
