@@ -31,7 +31,8 @@ services:
     name: signalops-dashboard
     runtime: static
     rootDir: frontend
-    plan: free
+    # No `plan` here on purpose: static sites have no plan tiers, and naming one
+    # fails validation rather than being ignored.
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     routes:
