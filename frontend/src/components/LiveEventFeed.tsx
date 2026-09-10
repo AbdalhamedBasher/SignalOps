@@ -15,7 +15,10 @@ const EVENT_LABELS: Record<FeedEntry["type"], string> = {
 
 export function LiveEventFeed({ entries }: LiveEventFeedProps) {
   return (
-    <section className="event-feed" aria-labelledby="event-feed-title">
+    <section
+      className={`event-feed${entries.length === 0 ? " event-feed--idle" : ""}`}
+      aria-labelledby="event-feed-title"
+    >
       <div className="event-feed__heading">
         <span id="event-feed-title">Live activity</span>
         {entries.length > 0 && (
@@ -24,10 +27,7 @@ export function LiveEventFeed({ entries }: LiveEventFeedProps) {
       </div>
 
       {entries.length === 0 ? (
-        <p className="event-feed__idle">
-          Waiting for network events. Anything that arrives while this page is
-          open will appear here.
-        </p>
+        <p className="event-feed__idle">Waiting for network events</p>
       ) : (
         <ol className="event-feed__list">
           {entries.map((entry) => (

@@ -142,41 +142,75 @@ kbd {
 .app-shell {
   width: min(1240px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 40px 0 72px;
+  padding: 22px 0 64px;
 }
 
+/* An operations console, not a landing page: the masthead is a toolbar.
+   Identity and status sit on the title's own line, and the descriptor drops
+   to a single subordinate row, so the first incident is visible without
+   scrolling on a laptop. */
 .hero {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 28px;
-  margin-bottom: 28px;
-  padding-bottom: 24px;
+  gap: 12px 28px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--border);
 }
 
+.hero > div:first-child {
+  display: grid;
+  grid-template-areas:
+    "title title"
+    "kicker summary";
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 3px;
+  min-width: 0;
+}
+
+.hero h1 {
+  grid-area: title;
+  margin-bottom: 0;
+  font-size: clamp(1.3rem, 2.2vw, 1.55rem);
+}
+
+.hero .eyebrow {
+  grid-area: kicker;
+  margin-bottom: 0;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+}
+
+/* Uppercase kickers are section labels, not ornament. Saturated blue on every
+   one of them reads as decoration; quiet grey reads as a data UI. */
 .eyebrow {
-  margin-bottom: 8px;
-  color: var(--brand);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.67rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 
 .hero__summary {
-  max-width: 62ch;
+  grid-area: summary;
+  max-width: 74ch;
   margin-bottom: 0;
-  color: var(--text-soft);
-  font-size: 0.97rem;
-  line-height: 1.6;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .hero__controls {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* =========================================================
@@ -264,8 +298,26 @@ kbd {
    Live event feed
    ========================================================= */
 .event-feed {
-  margin-bottom: 28px;
-  padding: 18px 20px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+}
+
+/* Nothing has happened yet, so it should occupy the space of nothing having
+   happened: one row, no card weight, above the content that matters. It takes
+   its full card treatment back the moment a real event lands. */
+.event-feed--idle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 14px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.event-feed--idle .event-feed__heading {
+  margin-bottom: 0;
 }
 
 .event-feed__heading {
@@ -1588,17 +1640,34 @@ kbd {
 @media (max-width: 780px) {
   .app-shell {
     width: min(100% - 28px, 1240px);
-    padding: 28px 0 56px;
+    padding: 18px 0 52px;
   }
 
   .hero {
     flex-direction: column;
-    gap: 18px;
+    align-items: stretch;
+    gap: 14px;
   }
 
   .hero__controls {
-    align-items: flex-start;
+    justify-content: flex-start;
     width: 100%;
+  }
+
+  /* The kicker and the descriptor stop fitting side by side well before the
+     text itself does, so they stack while the toolbar is still comfortable. */
+  .hero > div:first-child {
+    grid-template-areas:
+      "title"
+      "kicker"
+      "summary";
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 5px;
+  }
+
+  .hero .eyebrow {
+    padding-right: 0;
+    border-right: 0;
   }
 
   .metrics,
