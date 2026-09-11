@@ -39,6 +39,19 @@
 - **Presenter**: SignalOps AI Engineering Team
 - **Approved Tech Stack**: Google Gemini · Pydantic AI · Nokia Network as Code · FastAPI · React
 
+### This is deployed — evaluators can open it
+
+| | |
+| :--- | :--- |
+| **Dashboard** | https://signalops-dashboard.onrender.com |
+| **API** | https://signalops-api-i1fy.onrender.com |
+| **Source** | https://github.com/AbdalhamedBasher/SignalOps |
+
+Signs in automatically as the demo engineer. Open **INC-1001** to watch the agent
+confirm subscriber impact from live CAMARA reachability data, then **INC-0998**
+to watch it overrule an alarm that claimed impact. Hosted on a free tier — if
+the board is empty, the API is waking; wait about 50 seconds and refresh once.
+
 ### Speaker Notes
 > *"Good day evaluators. We are presenting SignalOps AI for the GSMA MENA Ignite Hackathon under the Industrial & Enterprise AI Automation theme.*
 >
@@ -224,7 +237,7 @@ flowchart LR
 
 ### Slide Visual & Copy
 - **Test Suite Completeness**:
-  - **92 passing automated tests** covering correlation, persistence, realtime sockets, runbooks, auth, and agent tool execution.
+  - **98 passing automated tests** covering correlation, persistence, realtime sockets, runbooks, auth, and agent tool execution.
   - Pydantic AI `TestModel` test verifies CAMARA tools are invoked during triage without spending model quota.
 - **Live Nokia Integration, Precisely Stated**:
   - **Three CAMARA APIs answer from Nokia's platform.** Device Reachability Status, Congestion Insights and Location Verification are called through Nokia's official `network-as-code` SDK, not hand-rolled HTTP. Every reading is stamped `nokia-network-as-code`.

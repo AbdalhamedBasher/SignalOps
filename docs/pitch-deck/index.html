@@ -315,13 +315,27 @@
           <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
             <span class="mono-pill">CAMARA Device Reachability</span>
             <span class="mono-pill">CAMARA Congestion Insights</span>
+            <span class="mono-pill">CAMARA Location Verification</span>
             <span class="mono-pill">Pydantic AI + Gemini</span>
             <span class="mono-pill">Nokia Network as Code</span>
           </div>
         </div>
+        <div class="card" style="max-width: 780px; margin-top: 16px;">
+          <h3 style="color: var(--accent);">This is deployed. You can open it now.</h3>
+          <p style="margin-top: 6px;">
+            Dashboard — <code>https://signalops-dashboard.onrender.com</code><br />
+            API — <code>https://signalops-api-i1fy.onrender.com</code><br />
+            Source — <code>github.com/AbdalhamedBasher/SignalOps</code>
+          </p>
+          <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">
+            Signs in automatically as the demo engineer. Open <strong>INC-1001</strong> to see the
+            agent confirm subscriber impact, then <strong>INC-0998</strong> to see it overrule the
+            alarm. Hosted on a free tier: if the board is empty, wait ~50s and refresh once.
+          </p>
+        </div>
       </div>
       <footer class="slide__footer">
-        <span>SignalOps AI Submission Sprint · Commit 3d2da5d</span>
+        <span>Live at signalops-dashboard.onrender.com</span>
         <span>Slide 01 of 10</span>
       </footer>
     </article>
@@ -504,9 +518,10 @@
       <div class="slide__content">
         <div class="grid-2">
           <div class="card card--accent">
-            <h3>92 Passing Automated Tests</h3>
+            <h3>98 Passing Automated Tests</h3>
             <p>Complete pytest coverage across alarm correlation, database persistence, WebSocket feeds, runbook retrieval, RBAC auth, and agent tool execution.</p>
             <p style="margin-top: 8px; font-size: 0.8rem; color: var(--accent);">Pydantic AI <code>TestModel</code> proves all three CAMARA tools are wired and invoked without consuming live quota.</p>
+            <p style="margin-top: 8px; font-size: 0.78rem; color: var(--muted);">Verified against the deployed build, not just locally: both demo incidents return stored, cited triage reports whose traces show all three CAMARA calls answering <code>nokia-network-as-code</code>.</p>
           </div>
           <div class="card">
             <h3>Live Nokia, Precisely Stated</h3>
