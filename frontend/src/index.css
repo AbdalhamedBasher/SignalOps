@@ -1487,6 +1487,14 @@ kbd {
   border: 1px solid rgba(201, 162, 39, 0.35);
 }
 
+/* Indigo, so the three CAMARA calls read as one family of network reads while
+   still being told apart: reachability blue, congestion amber, location indigo. */
+.triage__trace-tag--location {
+  color: #4a3da6;
+  background: #edeafb;
+  border: 1px solid rgba(74, 61, 166, 0.28);
+}
+
 .triage__trace-tag--runbook {
   color: var(--ok);
   background: var(--ok-bg);

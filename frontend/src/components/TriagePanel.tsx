@@ -62,6 +62,15 @@ function classifyTraceItem(trace: string): {
       detail: trace,
     };
   }
+  // Without this branch the third CAMARA call falls through to the generic
+  // "Agent Step" tag, and the trace reads as two network calls instead of three.
+  if (trace.includes("Location Verification")) {
+    return {
+      tag: "CAMARA Location",
+      tagClass: "triage__trace-tag--location",
+      detail: trace,
+    };
+  }
   if (trace.includes("runbook section")) {
     return {
       tag: "Runbook Retrieval",
