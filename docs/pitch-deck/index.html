@@ -268,20 +268,46 @@
 
     /* Print styles for direct PDF export (Ctrl+P) */
     @media print {
-      body { overflow: visible; background: #fff; color: #000; }
+      /* The slides are light text on a dark ground. Chrome drops background
+         colour unless "Background graphics" is ticked, which would leave
+         near-white text on white paper — so force colour printing rather than
+         depend on a checkbox somebody will forget. */
+      *,
+      *::before,
+      *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      /* Slides are 16:9. Landscape with no margin makes each one a full page
+         instead of a letterboxed rectangle floating in white. */
+      @page {
+        size: A4 landscape;
+        margin: 0;
+      }
+
+      html, body { width: 100%; height: auto; }
+      body { overflow: visible; background: #07101d; color: #e8eef7; }
       header.deck-bar, .notes-drawer { display: none !important; }
       main.deck-stage { display: block; padding: 0; }
       .slide {
         position: relative !important;
+        display: flex !important;
         opacity: 1 !important;
         transform: none !important;
         width: 100% !important;
         height: 100vh !important;
         page-break-after: always;
+        break-after: page;
         box-shadow: none !important;
-        border: 1px solid #ddd !important;
+        border: 0 !important;
+        border-radius: 0 !important;
         background: #07101d !important;
         color: #e8eef7 !important;
+      }
+      .slide:last-child {
+        page-break-after: auto;
+        break-after: auto;
       }
     }
   </style>
